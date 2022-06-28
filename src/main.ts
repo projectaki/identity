@@ -5,11 +5,13 @@ import { HttpClientModule } from '@angular/common/http';
 
 import { environment } from './environments/environment';
 import { AuthService } from 'projects/auth/src/public-api';
+import { RouterModule } from '@angular/router';
+import { routes } from './app/routes';
 
 if (environment.production) {
   enableProdMode();
 }
 
 bootstrapApplication(AppComponent, {
-  providers: [importProvidersFrom(HttpClientModule), AuthService],
-}).catch((err) => console.error(err));
+  providers: [importProvidersFrom(RouterModule.forRoot(routes)), importProvidersFrom(HttpClientModule), AuthService],
+}).catch(err => console.error(err));

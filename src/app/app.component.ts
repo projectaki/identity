@@ -1,15 +1,11 @@
 import { Component, inject } from '@angular/core';
+import { RouterModule } from '@angular/router';
 import { AuthService } from 'projects/auth/src/public-api';
 
 @Component({
   selector: 'app-root',
-  template: ``,
+  imports: [RouterModule],
+  template: `<router-outlet></router-outlet>`,
   standalone: true,
 })
-export class AppComponent {
-  private auth = inject(AuthService);
-
-  ngOnInit() {
-    this.auth.test();
-  }
-}
+export class AppComponent {}
