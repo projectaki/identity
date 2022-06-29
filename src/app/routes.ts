@@ -8,4 +8,6 @@ export const routes: Route[] = [
     path: 'login',
     component: LoginComponent,
   },
+  { path: '', redirectTo: 'home', pathMatch: 'full' },
+  { path: '**', redirectTo: 'home' },
 ];
