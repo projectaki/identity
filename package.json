@@ -18,6 +18,8 @@
     "@angular/platform-browser": "^14.0.3",
     "@angular/platform-browser-dynamic": "^14.0.3",
     "@angular/router": "^14.0.3",
+    "jsrsasign": "^10.5.25",
+    "jsrsasign-util": "^1.0.5",
     "rxjs": "~7.5.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.11.4"
@@ -27,6 +29,7 @@
     "@angular/cli": "^14.0.3",
     "@angular/compiler-cli": "^14.0.3",
     "@types/jasmine": "~3.10.0",
+    "@types/jsrsasign": "^10.5.1",
     "@types/node": "^12.11.1",
     "jasmine-core": "~4.0.0",
     "karma": "~6.3.0",
