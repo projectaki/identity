@@ -1,7 +1,7 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { AuthConfig } from './auth-config';
-declare const crypto: any;
+import { createCodeVerifier, createCodeChallenge, getAuthStorage, setAuthStorage } from './helpers';
 
 @Injectable()
 export class AuthService {
@@ -9,16 +9,21 @@ export class AuthService {
   private authConfig!: AuthConfig;
 
   authorize = () => {
-    const state = generateState();
+    const state = createCodeVerifier();
+    const codeVerifier = createCodeVerifier();
+    console.log('CV', codeVerifier);
+    const codeChallenge = createCodeChallenge(codeVerifier);
     setAuthStorage('state', state);
+    setAuthStorage('codeVerifier', codeVerifier);
     const { clientId, redirectUrl, responseType, audience, issuer, authorizeRoute } = this.authConfig;
-    location.href = `${issuer}/${authorizeRoute}?response_type=${responseType}&client_id=${clientId}&redirect_uri=${redirectUrl}&state=${state}&audience=${audience}`;
+    location.href = `${issuer}/${authorizeRoute}?response_type=${responseType}&client_id=${clientId}&redirect_uri=${redirectUrl}&state=${state}&audience=${audience}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
   };
 
   getAccessToken = () => {
-    const code = getAuthStorage().code;
+    const authStorage = getAuthStorage();
+    const { code, codeVerifier } = authStorage;
     const grantType = 'authorization_code';
-    const req = `grant_type=${grantType}&code=${code}&redirect_uri=${this.authConfig.redirectUrl}&client_id=${this.authConfig.clientId}`;
+    const req = `grant_type=${grantType}&code=${code}&redirect_uri=${this.authConfig.redirectUrl}&client_id=${this.authConfig.clientId}&code_verifier=${codeVerifier}`;
     const res = this.http.post('https://identity-auth.eu.auth0.com/oauth/token', req, {
       headers: new HttpHeaders().set('Content-Type', 'application/x-www-form-urlencoded'),
     });
@@ -37,17 +42,3 @@ export class AuthService {
     };
   };
 }
-//redirect uri must be absolute, must not have a fragment
-//delete code after used
-export const generateState = () => btoa([...crypto.getRandomValues(new Int16Array(16))].reduce((a, b) => (a += b), ''));
-export const getAuthStorage = () => JSON.parse(sessionStorage.getItem('authConfig') ?? '{}');
-export const setAuthStorage = (key: string, val: any) => {
-  const authConfig = getAuthStorage();
-  authConfig[key] = val;
-  sessionStorage.setItem('authConfig', JSON.stringify(authConfig));
-};
-export const removeFromAuthStorage = (key: string) => {
-  const authConfig = getAuthStorage();
-  delete authConfig[key];
-  sessionStorage.setItem('authConfig', JSON.stringify(authConfig));
-};

@@ -1,6 +1,7 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AuthService, getAuthStorage, removeFromAuthStorage, setAuthStorage } from 'projects/auth/src/public-api';
+import { getAuthStorage, setAuthStorage, removeFromAuthStorage } from 'projects/auth/src/lib/helpers';
+import { AuthService } from 'projects/auth/src/public-api';
 import { switchMap, tap } from 'rxjs/operators';
 
 @Component({
@@ -18,7 +19,6 @@ export class LoginComponent implements OnInit {
       .pipe(
         switchMap(({ code, state }) => {
           const authStorage = getAuthStorage();
-          console.log(authStorage.state, state);
           if (authStorage.state !== state) throw new Error('Invalid state');
           setAuthStorage('code', code);
 
@@ -26,6 +26,8 @@ export class LoginComponent implements OnInit {
             tap(authResult => {
               setAuthStorage('authResult', authResult);
               removeFromAuthStorage('code');
+              removeFromAuthStorage('codeVerifier');
+              removeFromAuthStorage('state');
             })
           );
         })

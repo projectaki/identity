@@ -1,5 +1,12 @@
 import { Component, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
+import {
+  base64UrlEncode,
+  createCodeChallenge,
+  createCodeVerifier,
+  sha256,
+  sha256Async,
+} from 'projects/auth/src/lib/helpers';
 import { AuthService } from 'projects/auth/src/public-api';
 
 @Component({
