@@ -3,9 +3,12 @@
   "compileOnSave": false,
   "compilerOptions": {
     "paths": {
-      "auth": [
-        "dist/auth"
-      ]
+      "auth": ["dist/auth"],
+      "@identity-auth/core": ["projects/auth/src/public-api.ts"],
+      "@identity-auth/encoding": ["projects/auth/src/lib/encode-helper.ts"],
+      "@identity-auth/hashing": ["projects/auth/src/lib/hash-helper.ts"],
+      "@identity-auth/storage": ["projects/auth/src/lib/storage-helper.ts"],
+      "@identity-auth/models": ["projects/auth/src/lib/models.ts"]
     },
     "baseUrl": "./",
     "outDir": "./dist/out-tsc",
@@ -23,10 +26,7 @@
     "importHelpers": true,
     "target": "es2020",
     "module": "es2020",
-    "lib": [
-      "es2020",
-      "dom"
-    ]
+    "lib": ["es2020", "dom"]
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

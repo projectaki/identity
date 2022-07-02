@@ -1,12 +1,5 @@
 import { Component, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import {
-  base64UrlEncode,
-  createCodeChallenge,
-  createCodeVerifier,
-  sha256,
-  sha256Async,
-} from 'projects/auth/src/lib/helpers';
 import { AuthService } from 'projects/auth/src/public-api';
 
 @Component({
@@ -25,8 +18,9 @@ export class AppComponent {
       redirectUrl: 'http://localhost:4200/login',
       responseType: 'code',
       issuer: 'https://identity-auth.eu.auth0.com',
-      authorizeRoute: 'authorize',
-      tokenRoute: 'oauth/token',
+      useDiscovery: false,
+      authorizeEndpoint: 'https://identity-auth.eu.auth0.com/authorize',
+      tokenEndpoint: 'https://identity-auth.eu.auth0.com/oauth/token',
     });
   }
 }
