@@ -1,6 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { getAuthStorage, setAuthStorage, removeFromAuthStorage } from 'projects/auth/src/lib/helpers';
+import { getAuthStorage, setAuthStorage, removeFromAuthStorage } from 'projects/auth/src/lib/storage-helper';
 import { AuthService } from 'projects/auth/src/public-api';
 import { switchMap, tap } from 'rxjs/operators';
 
