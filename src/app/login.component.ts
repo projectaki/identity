@@ -1,8 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { getAuthStorage, setAuthStorage, removeFromAuthStorage } from 'projects/auth/src/lib/storage-helper';
+import { Router } from '@angular/router';
 import { AuthService } from 'projects/auth/src/public-api';
-import { switchMap, tap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-login',
@@ -10,28 +8,17 @@ import { switchMap, tap } from 'rxjs/operators';
   standalone: true,
 })
 export class LoginComponent implements OnInit {
-  route = inject(ActivatedRoute);
   protected auth = inject(AuthService);
   private router = inject(Router);
 
   ngOnInit(): void {
-    this.route.queryParams
-      .pipe(
-        switchMap(({ code, state }) => {
-          const authStorage = getAuthStorage();
-          if (authStorage.state !== state) throw new Error('Invalid state');
-          setAuthStorage('code', code);
+    this.auth.handleAuthResult().subscribe(x => {
+      console.log('handled auth result', x);
+    });
 
-          return this.auth.getAccessToken().pipe(
-            tap(authResult => {
-              setAuthStorage('authResult', authResult);
-              removeFromAuthStorage('code');
-              removeFromAuthStorage('codeVerifier');
-              removeFromAuthStorage('state');
-            })
-          );
-        })
-      )
-      .subscribe(() => (location.href = 'http://localhost:4200/home'));
+    this.auth.authComplete$.subscribe(x => {
+      console.log('auth complete', x);
+      this.router.navigate(['/']);
+    });
   }
 }
