@@ -3,10 +3,11 @@ export interface AuthConfig {
   clientId: string;
   redirectUrl: string;
   issuer: string;
-  useDiscovery: boolean;
   audience?: string;
   authorizeEndpoint?: string;
   tokenEndpoint?: string;
+  jwks_uri?: string;
+  jwks?: any;
 }
 
 export interface AuthorizeUrlParams {
@@ -15,4 +16,11 @@ export interface AuthorizeUrlParams {
   redirectUrl: string;
   endPoint: string;
   audience?: string;
+}
+
+export interface DiscoveryDocument {
+  issuer: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  jwks_uri: string;
 }

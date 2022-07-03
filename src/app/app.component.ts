@@ -18,13 +18,15 @@ export class AppComponent {
       redirectUrl: 'http://localhost:4200/login',
       responseType: 'code',
       issuer: 'https://identity-auth.eu.auth0.com',
-      useDiscovery: false,
       authorizeEndpoint: 'https://identity-auth.eu.auth0.com/authorize',
       tokenEndpoint: 'https://identity-auth.eu.auth0.com/oauth/token',
+      jwks_uri: 'https://identity-auth.eu.auth0.com/.well-known/jwks.json',
     });
 
     this.auth.authComplete$.subscribe(x => {
       console.log('auth complete', x);
     });
+
+    this.auth.loadDiscoveryDocument().subscribe();
   }
 }

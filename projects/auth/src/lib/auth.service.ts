@@ -31,4 +31,8 @@ export class AuthService {
   getAccessToken = () => {
     return from(this.auth.getAccessToken());
   };
+
+  loadDiscoveryDocument = () => {
+    return from(this.auth.loadDiscoveryDocument());
+  };
 }

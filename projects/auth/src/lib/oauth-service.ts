@@ -1,24 +1,29 @@
 import {
   createAuthUrl,
   createCodeVerifierCodeChallengePair,
+  createDiscoveryUrl,
   createNonce,
   createTokenRequestBody,
   createTokenUrl,
 } from '@identity-auth/core';
-import { AuthConfig } from '@identity-auth/models';
+import { AuthConfig, DiscoveryDocument } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
 
 export class OAuthService {
   private authConfig!: AuthConfig;
-
+  private discoveryDocument!: DiscoveryDocument;
   /**
    * Creates the auth URL and redirects to it.
    *
    * Description:
    * Creates a nonce for the "state" param and generates a code verifier and code challenge.
    * The state and code verifier gets saved in the session storage, as it is needed after the redirect. (cannot be kept in memory)
+   * If the discovery document was not loaded on bootstrap, will load it first.
+   * @throws Error if the discovery document was not loaded on bootstrap AND required endpoints are not set explicitly.
    */
-  login = () => {
+  login = async () => {
+    this.ensureAllConfigIsLoaded();
+
     const state = createNonce(16);
     const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
     setAuthStorage('state', state);
@@ -32,17 +37,7 @@ export class OAuthService {
    * @param authConfig
    */
   setAuthConfig = (authConfig: AuthConfig) => {
-    const redirectUrl = encodeURIComponent(authConfig.redirectUrl);
-    const aud = authConfig.audience ? encodeURIComponent(authConfig.audience) : '';
-
-    this.authConfig = {
-      ...authConfig,
-      redirectUrl,
-    };
-
-    if (aud) {
-      this.authConfig.audience = aud;
-    }
+    this.authConfig = authConfig;
   };
 
   /**
@@ -68,13 +63,26 @@ export class OAuthService {
    * @param func A callback function to call after the auth flow is completed.
    * @returns Promise<boolean>
    */
-  handleAuthResult = (func?: (x: any) => void) => {
+  handleAuthResult = async (func?: (x: any) => void) => {
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
-    return this.handleCodeFlowRedirect(params).then(x => {
-      if (func) func(x);
-      return x;
-    });
+    const x_1 = await this.handleCodeFlowRedirect(params);
+    if (func) func(x_1);
+    return x_1;
+  };
+
+  /**
+   * Should be called on application bootstrap, to get the discovery document.
+   * Load the discovery document using the issuer provided in the authConfig.
+   * @param func A callback function to call after the discovery document is loaded.
+   */
+  loadDiscoveryDocument = async (func?: (x: DiscoveryDocument) => void): Promise<void> => {
+    const url = createDiscoveryUrl(this.authConfig);
+    const response = await fetch(url, { method: 'GET' });
+    const discoveryDocument = await response.json();
+    this.discoveryDocument = discoveryDocument;
+    if (func) func(discoveryDocument);
+    console.log(discoveryDocument);
   };
 
   private handleCodeFlowRedirect = (params: URLSearchParams): Promise<boolean> => {
@@ -88,7 +96,7 @@ export class OAuthService {
         const data = await this.fetchAccessToken(code);
         setAuthStorage('authResult', data);
         removeFromAuthStorage('codeVerifier');
-        document.location.href = decodeURIComponent(this.authConfig.redirectUrl);
+        document.location.href = this.authConfig.redirectUrl;
         return resolve(true);
       } catch (err) {
         return reject(err);
@@ -118,5 +126,15 @@ export class OAuthService {
     if (!authStorage.state && state) throw new Error('Missing state in storage but expected one');
     if (authStorage.state && authStorage.state !== state) throw new Error('Invalid state');
     if (authStorage.state && state) removeFromAuthStorage('state');
+  };
+
+  private ensureAllConfigIsLoaded = () => {
+    if (!this.authConfig) throw new Error('Missing authConfig');
+    if (!this.discoveryDocument && !this.authConfig.authorizeEndpoint)
+      throw new Error('Authorization endpoint is required, if not using discovery!');
+    if (!this.discoveryDocument && !this.authConfig.tokenEndpoint)
+      throw new Error('Token endpoint is required, if not using discovery!');
+    if (!this.discoveryDocument && !this.authConfig.jwks && !this.authConfig.jwks_uri)
+      throw new Error('Jwsk/Jwks uri is required, if not using discovery!');
   };
 }
