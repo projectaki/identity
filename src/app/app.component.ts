@@ -22,5 +22,9 @@ export class AppComponent {
       authorizeEndpoint: 'https://identity-auth.eu.auth0.com/authorize',
       tokenEndpoint: 'https://identity-auth.eu.auth0.com/oauth/token',
     });
+
+    this.auth.authComplete$.subscribe(x => {
+      console.log('auth complete', x);
+    });
   }
 }
