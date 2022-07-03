@@ -4,11 +4,15 @@ import { sha256 } from '@identity-auth/hashing';
 
 export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, state?: string) => {
   const { clientId, endPoint, redirectUrl, responseType, audience } = getAuthorizeUrlParameters(authConfig);
-  const authUrl = `${endPoint}?response_type=${responseType}&client_id=${clientId}&redirect_uri=${encodeURIComponent(
-    redirectUrl
-  )}${state ? `&state=${state}` : ''}${audience ? `&audience=${encodeURIComponent(audience)}` : ''}${
-    codeChallenge ? `&code_challenge=${codeChallenge}` : ''
-  }${codeChallenge ? `&code_challenge_method=S256` : ''}`;
+  const url = new URLSearchParams();
+  url.append('client_id', clientId);
+  url.append('redirect_uri', redirectUrl);
+  url.append('response_type', responseType);
+  //url.append('scope', 'openid');
+  if (audience) url.append('audience', audience);
+  url.append('code_challenge_method', 'S256');
+  if (codeChallenge) url.append('code_challenge', codeChallenge);
+  if (state) url.append('state', state);
 
   function getAuthorizeUrlParameters(authConfig: AuthConfig): AuthorizeUrlParams {
     const { responseType, clientId, redirectUrl, audience, issuer, authorizeEndpoint } = authConfig;
@@ -23,8 +27,9 @@ export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, st
     if (audience) params.audience = audience;
     return params;
   }
-
-  return authUrl;
+  const res = `${endPoint}?${url.toString()}`;
+  console.log(res);
+  return res;
 };
 
 export const createTokenUrl = (authConfig: AuthConfig) => {
