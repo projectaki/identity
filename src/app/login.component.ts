@@ -14,10 +14,6 @@ export class LoginComponent implements OnInit {
   ngOnInit(): void {
     this.auth.handleAuthResult().subscribe(x => {
       console.log('handled auth result', x);
-    });
-
-    this.auth.authComplete$.subscribe(x => {
-      console.log('auth complete', x);
       this.router.navigate(['/']);
     });
   }
