@@ -22,21 +22,33 @@ export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, st
       redirectUrl,
       responseType,
       endPoint: authorizeEndpoint,
+      audience: audience,
     } as AuthorizeUrlParams;
-    if (audience) params.audience = audience;
     return params;
   }
   const res = `${endPoint}?${url.toString()}`;
-  console.log(res);
   return res;
 };
 
 export const createTokenRequestBody = (authConfig: AuthConfig, code: string, codeVerifier?: string) => {
-  const grantType = 'authorization_code';
-  const body = `grant_type=${grantType}&code=${code}&redirect_uri=${encodeURIComponent(
-    authConfig.redirectUrl
-  )}&client_id=${authConfig.clientId}&code_verifier=${codeVerifier}`;
+  const grantType = getGrantType(authConfig);
+  const urlSearchParam = new URLSearchParams();
+  urlSearchParam.append('grant_type', grantType);
+  urlSearchParam.append('code', code);
+  if (codeVerifier) urlSearchParam.append('code_verifier', codeVerifier);
+  urlSearchParam.append('redirect_uri', authConfig.redirectUrl);
+  urlSearchParam.append('client_id', authConfig.clientId);
+  const body = urlSearchParam.toString();
+
   return body;
+};
+
+export const getGrantType = (authConfig: AuthConfig) => {
+  const { responseType } = authConfig;
+  if (responseType === 'code') {
+    return 'authorization_code';
+  }
+  return 'implicit';
 };
 
 export const createCodeVerifierCodeChallengePair = () => {
