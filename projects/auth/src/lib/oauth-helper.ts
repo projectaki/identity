@@ -11,25 +11,19 @@ export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, st
   }${codeChallenge ? `&code_challenge_method=S256` : ''}`;
 
   function getAuthorizeUrlParameters(authConfig: AuthConfig): AuthorizeUrlParams {
-    const { responseType, clientId, redirectUrl, audience, issuer, authorizeEndpoint } = authConfig;
-    const authEndpoint = false ? '' : authorizeEndpoint;
+    const { responseType, clientId, redirectUrl, audience, authorizeEndpoint } = authConfig;
 
     const params = {
       clientId,
       redirectUrl,
       responseType,
-      endPoint: authEndpoint,
+      endPoint: authorizeEndpoint,
     } as AuthorizeUrlParams;
     if (audience) params.audience = audience;
     return params;
   }
 
   return authUrl;
-};
-
-export const createTokenUrl = (authConfig: AuthConfig) => {
-  const url = false ? '' : authConfig.tokenEndpoint;
-  return url!;
 };
 
 export const createTokenRequestBody = (authConfig: AuthConfig, code: string, codeVerifier?: string) => {
