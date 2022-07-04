@@ -23,11 +23,13 @@ export class OAuthService {
   login = async () => {
     this.ensureAllConfigIsLoaded();
 
-    const state = createNonce(16);
+    const state = createNonce(32);
+    const nonce = createNonce(32);
     const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
     setAuthStorage('state', state);
+    setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
-    const authUrl = createAuthUrl(this.authConfig, codeChallenge, state);
+    const authUrl = createAuthUrl(this.authConfig, codeChallenge, state, nonce);
     location.href = authUrl;
   };
 

@@ -2,13 +2,13 @@ import { AuthConfig, AuthorizeUrlParams } from './models';
 import { base64UrlEncode } from '@identity-auth/encoding';
 import { sha256 } from '@identity-auth/hashing';
 
-export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, state?: string) => {
+export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, state?: string, nonce?: string) => {
   const { clientId, endPoint, redirectUrl, responseType, audience } = getAuthorizeUrlParameters(authConfig);
   const url = new URLSearchParams();
   url.append('client_id', clientId);
   url.append('redirect_uri', redirectUrl);
   url.append('response_type', responseType);
-  //url.append('scope', 'openid');
+  url.append('scope', 'openid');
   if (audience) url.append('audience', audience);
   url.append('code_challenge_method', 'S256');
   if (codeChallenge) url.append('code_challenge', codeChallenge);
