@@ -4,7 +4,6 @@ import {
   createDiscoveryUrl,
   createNonce,
   createTokenRequestBody,
-  createTokenUrl,
 } from '@identity-auth/core';
 import { AuthConfig, DiscoveryDocument } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
@@ -80,9 +79,24 @@ export class OAuthService {
     const url = createDiscoveryUrl(this.authConfig);
     const response = await fetch(url, { method: 'GET' });
     const discoveryDocument = await response.json();
+    this.validateDiscoveryDocument(discoveryDocument);
     this.discoveryDocument = discoveryDocument;
+    this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
+    this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
+
+    const jwks = await this.loadJwks();
+    this.authConfig.jwks = jwks;
+    console.log(jwks);
+
     if (func) func(discoveryDocument);
     console.log(discoveryDocument);
+  };
+
+  private loadJwks = async () => {
+    const url = `${this.discoveryDocument.jwks_uri}`;
+    const response = await fetch(url, { method: 'GET' });
+    const jwks = await response.json();
+    return jwks;
   };
 
   private handleCodeFlowRedirect = (params: URLSearchParams): Promise<boolean> => {
@@ -106,9 +120,8 @@ export class OAuthService {
 
   private fetchAccessToken = async (code: string) => {
     const { codeVerifier } = getAuthStorage();
-    const tokenEndpoint = createTokenUrl(this.authConfig);
     const body = createTokenRequestBody(this.authConfig, code, codeVerifier);
-    const response = await fetch(tokenEndpoint, {
+    const response = await fetch(this.authConfig.tokenEndpoint!, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -130,11 +143,18 @@ export class OAuthService {
 
   private ensureAllConfigIsLoaded = () => {
     if (!this.authConfig) throw new Error('Missing authConfig');
-    if (!this.discoveryDocument && !this.authConfig.authorizeEndpoint)
+    if (!this.authConfig.authorizeEndpoint)
       throw new Error('Authorization endpoint is required, if not using discovery!');
-    if (!this.discoveryDocument && !this.authConfig.tokenEndpoint)
-      throw new Error('Token endpoint is required, if not using discovery!');
-    if (!this.discoveryDocument && !this.authConfig.jwks && !this.authConfig.jwks_uri)
-      throw new Error('Jwsk/Jwks uri is required, if not using discovery!');
+    if (!this.authConfig.tokenEndpoint) throw new Error('Token endpoint is required, if not using discovery!');
+    if (!this.authConfig.jwks) throw new Error('Jwsk is required!');
   };
+
+  private validateDiscoveryDocument(discoveryDocument: DiscoveryDocument) {
+    if (!discoveryDocument) throw new Error('Discovery document is required!');
+
+    const issuerWithoutTrailingSlash = discoveryDocument.issuer.endsWith('/')
+      ? discoveryDocument.issuer.slice(0, -1)
+      : discoveryDocument.issuer;
+    if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
+  }
 }

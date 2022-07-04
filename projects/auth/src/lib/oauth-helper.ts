@@ -15,14 +15,13 @@ export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, st
   if (state) url.append('state', state);
 
   function getAuthorizeUrlParameters(authConfig: AuthConfig): AuthorizeUrlParams {
-    const { responseType, clientId, redirectUrl, audience, issuer, authorizeEndpoint } = authConfig;
-    const authEndpoint = false ? '' : authorizeEndpoint;
+    const { responseType, clientId, redirectUrl, audience, authorizeEndpoint } = authConfig;
 
     const params = {
       clientId,
       redirectUrl,
       responseType,
-      endPoint: authEndpoint,
+      endPoint: authorizeEndpoint,
     } as AuthorizeUrlParams;
     if (audience) params.audience = audience;
     return params;
@@ -30,11 +29,6 @@ export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, st
   const res = `${endPoint}?${url.toString()}`;
   console.log(res);
   return res;
-};
-
-export const createTokenUrl = (authConfig: AuthConfig) => {
-  const url = false ? '' : authConfig.tokenEndpoint;
-  return url!;
 };
 
 export const createTokenRequestBody = (authConfig: AuthConfig, code: string, codeVerifier?: string) => {
