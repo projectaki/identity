@@ -4,11 +4,15 @@ import { sha256 } from '@identity-auth/hashing';
 
 export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, state?: string) => {
   const { clientId, endPoint, redirectUrl, responseType, audience } = getAuthorizeUrlParameters(authConfig);
-  const authUrl = `${endPoint}?response_type=${responseType}&client_id=${clientId}&redirect_uri=${encodeURIComponent(
-    redirectUrl
-  )}${state ? `&state=${state}` : ''}${audience ? `&audience=${encodeURIComponent(audience)}` : ''}${
-    codeChallenge ? `&code_challenge=${codeChallenge}` : ''
-  }${codeChallenge ? `&code_challenge_method=S256` : ''}`;
+  const url = new URLSearchParams();
+  url.append('client_id', clientId);
+  url.append('redirect_uri', redirectUrl);
+  url.append('response_type', responseType);
+  //url.append('scope', 'openid');
+  if (audience) url.append('audience', audience);
+  url.append('code_challenge_method', 'S256');
+  if (codeChallenge) url.append('code_challenge', codeChallenge);
+  if (state) url.append('state', state);
 
   function getAuthorizeUrlParameters(authConfig: AuthConfig): AuthorizeUrlParams {
     const { responseType, clientId, redirectUrl, audience, authorizeEndpoint } = authConfig;
@@ -18,20 +22,33 @@ export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, st
       redirectUrl,
       responseType,
       endPoint: authorizeEndpoint,
+      audience: audience,
     } as AuthorizeUrlParams;
-    if (audience) params.audience = audience;
     return params;
   }
-
-  return authUrl;
+  const res = `${endPoint}?${url.toString()}`;
+  return res;
 };
 
 export const createTokenRequestBody = (authConfig: AuthConfig, code: string, codeVerifier?: string) => {
-  const grantType = 'authorization_code';
-  const body = `grant_type=${grantType}&code=${code}&redirect_uri=${encodeURIComponent(
-    authConfig.redirectUrl
-  )}&client_id=${authConfig.clientId}&code_verifier=${codeVerifier}`;
+  const grantType = getGrantType(authConfig);
+  const urlSearchParam = new URLSearchParams();
+  urlSearchParam.append('grant_type', grantType);
+  urlSearchParam.append('code', code);
+  if (codeVerifier) urlSearchParam.append('code_verifier', codeVerifier);
+  urlSearchParam.append('redirect_uri', authConfig.redirectUrl);
+  urlSearchParam.append('client_id', authConfig.clientId);
+  const body = urlSearchParam.toString();
+
   return body;
+};
+
+export const getGrantType = (authConfig: AuthConfig) => {
+  const { responseType } = authConfig;
+  if (responseType === 'code') {
+    return 'authorization_code';
+  }
+  return 'implicit';
 };
 
 export const createCodeVerifierCodeChallengePair = () => {
