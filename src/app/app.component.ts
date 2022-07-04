@@ -12,21 +12,9 @@ export class AppComponent {
   protected auth = inject(AuthService);
 
   ngOnInit(): void {
-    this.auth.setAuthConfig({
-      audience: 'https://identity.com',
-      clientId: 'zIB73oRSqof13mYtTIud2usuxtLF7MlU',
-      redirectUrl: 'http://localhost:4200/login',
-      responseType: 'code',
-      issuer: 'https://identity-auth.eu.auth0.com',
-      authorizeEndpoint: 'https://identity-auth.eu.auth0.com/authorize',
-      tokenEndpoint: 'https://identity-auth.eu.auth0.com/oauth/token',
-      jwks_uri: 'https://identity-auth.eu.auth0.com/.well-known/jwks.json',
-    });
-
+    console.log('AppComponent.ngOnInit');
     this.auth.authComplete$.subscribe(x => {
       console.log('auth complete', x);
     });
-
-    this.auth.loadDiscoveryDocument().subscribe();
   }
 }
