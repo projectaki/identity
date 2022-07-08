@@ -5,6 +5,8 @@ import {
   createDiscoveryUrl,
   createNonce,
   createTokenRequestBody,
+  trimIssuerOfTrailingSlash,
+  validateIdToken,
 } from '@identity-auth/core';
 import { AuthConfig, AuthResult, DiscoveryDocument } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
@@ -173,9 +175,11 @@ export class OAuthService {
   private validateDiscoveryDocument(discoveryDocument: DiscoveryDocument) {
     if (!discoveryDocument) throw new Error('Discovery document is required!');
 
-    const issuerWithoutTrailingSlash = discoveryDocument.issuer.endsWith('/')
-      ? discoveryDocument.issuer.slice(0, -1)
-      : discoveryDocument.issuer;
+    const issuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(discoveryDocument.issuer);
     if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
+  }
+
+  validate(idToken: string) {
+    validateIdToken(idToken, this.authConfig);
   }
 }

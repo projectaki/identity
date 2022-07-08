@@ -9,6 +9,9 @@ import { map } from 'rxjs';
   selector: 'app-home',
   template: `
     <button (click)="auth.login()">authorize</button>
+    <ng-container *ngIf="idTokenString$ | async as idtokenstring">
+      <button (click)="validate(idtokenstring)">validate</button>
+    </ng-container>
     <ng-container *ngIf="idToken$ | async as idtoken">
       <h2>Id token</h2>
       <pre>{{ idtoken.header | json }}</pre>
@@ -36,6 +39,7 @@ export class HomeComponent implements OnInit {
       return { header: JSON.parse(decodedHeader), body: JSON.parse(decodedBody) };
     })
   );
+  protected idTokenString$ = this.auth.getIdToken();
   protected idToken$ = this.auth.getIdToken().pipe(
     map(t => {
       if (!t) return null;
@@ -49,4 +53,8 @@ export class HomeComponent implements OnInit {
   );
 
   ngOnInit(): void {}
+
+  validate(token: string) {
+    this.auth.auth.validate(token);
+  }
 }
