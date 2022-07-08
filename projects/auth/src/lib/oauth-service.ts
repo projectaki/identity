@@ -47,9 +47,9 @@ export class OAuthService {
    * @param func A callback function which gets called when getting the access token.
    * @returns A Promise which resolves with the access token, or null if there is no access token.
    */
-  getAccessToken = (func?: (x: any) => void): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      const token = getAuthStorage().authResult?.access_token;
+  getAccessToken = (func?: (x: any) => void): Promise<string | null> => {
+    return new Promise<string | null>((resolve, reject) => {
+      const token: string = getAuthStorage().authResult?.access_token;
       if (token) {
         resolve(token);
       } else resolve(null);
@@ -64,8 +64,8 @@ export class OAuthService {
    * @param func A callback function which gets called when getting the id token.
    * @returns A Promise which resolves with the id token, or null if there is no id token.
    */
-  getIdToken = (func?: (x: any) => void): Promise<any> => {
-    return new Promise((resolve, reject) => {
+  getIdToken = (func?: (x: any) => void): Promise<string | null> => {
+    return new Promise<string | null>((resolve, reject) => {
       const token = getAuthStorage().authResult?.id_token;
       if (token) {
         resolve(token);

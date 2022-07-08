@@ -32,6 +32,10 @@ export class AuthService {
     return from(this.auth.getAccessToken());
   };
 
+  getIdToken = () => {
+    return from(this.auth.getIdToken());
+  };
+
   loadDiscoveryDocument = () => {
     return from(this.auth.loadDiscoveryDocument());
   };
