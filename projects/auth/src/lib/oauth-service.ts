@@ -1,11 +1,12 @@
 import {
   createAuthUrl,
+  createAuthUrlFromConfig,
   createCodeVerifierCodeChallengePair,
   createDiscoveryUrl,
   createNonce,
   createTokenRequestBody,
 } from '@identity-auth/core';
-import { AuthConfig, DiscoveryDocument } from '@identity-auth/models';
+import { AuthConfig, AuthResult, DiscoveryDocument } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
 
 export class OAuthService {
@@ -29,7 +30,7 @@ export class OAuthService {
     setAuthStorage('state', state);
     setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
-    const authUrl = createAuthUrl(this.authConfig, codeChallenge, state, nonce);
+    const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
     location.href = authUrl;
   };
 
@@ -59,6 +60,23 @@ export class OAuthService {
   };
 
   /**
+   *
+   * @param func A callback function which gets called when getting the id token.
+   * @returns A Promise which resolves with the id token, or null if there is no id token.
+   */
+  getIdToken = (func?: (x: any) => void): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const token = getAuthStorage().authResult?.id_token;
+      if (token) {
+        resolve(token);
+      } else resolve(null);
+    }).then(x => {
+      if (func) func(x);
+      return x;
+    });
+  };
+
+  /**
    * Handler for the authentication redirect. Needs to be called in the redirect route.
    * Will vallidate the "state" param, and handle the flow based on the grant type.
    * @param func A callback function to call after the auth flow is completed.
@@ -78,10 +96,11 @@ export class OAuthService {
    * @param func A callback function to call after the discovery document is loaded.
    */
   loadDiscoveryDocument = async (func?: (x: DiscoveryDocument) => void): Promise<void> => {
-    const url = createDiscoveryUrl(this.authConfig);
+    const url = createDiscoveryUrl(this.authConfig.issuer);
     const response = await fetch(url, { method: 'GET' });
     const discoveryDocument = await response.json();
-    this.validateDiscoveryDocument(discoveryDocument);
+    if (this.authConfig.validateDiscovery == null || !!this.authConfig.validateDiscovery)
+      this.validateDiscoveryDocument(discoveryDocument);
     this.discoveryDocument = discoveryDocument;
     this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
     this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
@@ -109,10 +128,10 @@ export class OAuthService {
       const code = params.get('code')!;
 
       try {
-        const data = await this.fetchAccessToken(code);
+        const data = await this.fetchTokens(code);
         setAuthStorage('authResult', data);
         removeFromAuthStorage('codeVerifier');
-        document.location.href = this.authConfig.redirectUrl;
+        document.location.href = this.authConfig.redirectUri;
         return resolve(true);
       } catch (err) {
         return reject(err);
@@ -120,7 +139,7 @@ export class OAuthService {
     });
   };
 
-  private fetchAccessToken = async (code: string) => {
+  private fetchTokens = async (code: string): Promise<AuthResult> => {
     const { codeVerifier } = getAuthStorage();
     const body = createTokenRequestBody(this.authConfig, code, codeVerifier);
     const response = await fetch(this.authConfig.tokenEndpoint!, {

@@ -1,21 +1,58 @@
 export interface AuthConfig {
   responseType: 'code';
   clientId: string;
-  redirectUrl: string;
+  redirectUri: string;
   issuer: string;
-  audience?: string;
+  scope: string;
   authorizeEndpoint?: string;
   tokenEndpoint?: string;
-  jwks_uri?: string;
   jwks?: any;
+  queryParams?: { [key: string]: string };
+  validateDiscovery?: boolean;
 }
 
 export interface AuthorizeUrlParams {
-  responseType: 'code';
-  clientId: string;
-  redirectUrl: string;
-  endPoint: string;
-  audience?: string;
+  response_type: 'code';
+  client_id: string;
+  redirect_uri: string;
+  scope: string;
+  state?: string;
+  response_mode?: 'query' | 'fragment';
+  nonce?: string;
+  display?: 'page' | 'popup' | 'touch' | 'wap';
+  prompt?: 'none' | 'consent' | 'login' | 'select_account';
+  max_age?: number;
+  ui_locales?: string;
+  id_token_hint?: string;
+  login_hint?: string;
+  acr_values?: string;
+  [key: string]: any;
+}
+
+export interface AuthErrorParams {
+  error:
+    | 'access_denied'
+    | 'unauthorized_client'
+    | 'interaction_required'
+    | 'invalid_request'
+    | 'invalid_request_uri'
+    | 'invalid_request_object'
+    | 'login_required'
+    | 'unsupported_response_type'
+    | 'server_error'
+    | 'temporarily_unavailable'
+    | 'user_cancelled'
+    | 'invalid_client'
+    | 'invalid_grant'
+    | 'invalid_scope'
+    | 'user_selection_required'
+    | 'consent_required'
+    | 'request_not_supported'
+    | 'request_uri_not_supported'
+    | 'registration_not_supported';
+  error_description?: string;
+  error_uri?: string;
+  state?: string;
 }
 
 export interface DiscoveryDocument {
@@ -23,4 +60,27 @@ export interface DiscoveryDocument {
   authorization_endpoint: string;
   token_endpoint: string;
   jwks_uri: string;
+}
+
+export interface IdToken {
+  iss: string;
+  sub: string;
+  aud: string;
+  exp: number;
+  iat: number;
+  auth_time?: number;
+  nonce?: string;
+  acr?: string;
+  amr?: string;
+  azp?: string;
+  [key: string]: any;
+}
+
+export interface AuthResult {
+  access_token: string;
+  id_token: string;
+  refresh_token: string;
+  expires_in: number;
+  scope: string;
+  token_type: string;
 }

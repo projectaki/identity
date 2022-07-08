@@ -2,31 +2,40 @@ import { AuthConfig, AuthorizeUrlParams } from './models';
 import { base64UrlEncode } from '@identity-auth/encoding';
 import { sha256 } from '@identity-auth/hashing';
 
-export const createAuthUrl = (authConfig: AuthConfig, codeChallenge?: string, state?: string, nonce?: string) => {
-  const { clientId, endPoint, redirectUrl, responseType, audience } = getAuthorizeUrlParameters(authConfig);
-  const url = new URLSearchParams();
-  url.append('client_id', clientId);
-  url.append('redirect_uri', redirectUrl);
-  url.append('response_type', responseType);
-  url.append('scope', 'openid');
-  if (audience) url.append('audience', audience);
-  url.append('code_challenge_method', 'S256');
-  if (codeChallenge) url.append('code_challenge', codeChallenge);
-  if (state) url.append('state', state);
-
-  function getAuthorizeUrlParameters(authConfig: AuthConfig): AuthorizeUrlParams {
-    const { responseType, clientId, redirectUrl, audience, authorizeEndpoint } = authConfig;
-
-    const params = {
-      clientId,
-      redirectUrl,
-      responseType,
-      endPoint: authorizeEndpoint,
-      audience: audience,
-    } as AuthorizeUrlParams;
-    return params;
+export const createAuthUrlFromConfig = (
+  authConfig: AuthConfig,
+  state?: string,
+  nonce?: string,
+  codeChallenge?: string
+) => {
+  const authUrlParams: AuthorizeUrlParams = {
+    client_id: authConfig.clientId,
+    redirect_uri: authConfig.redirectUri,
+    response_type: authConfig.responseType,
+    scope: authConfig.scope,
+  };
+  if (state) authUrlParams.state = state;
+  if (nonce) authUrlParams.nonce = nonce;
+  const queryParams = authConfig.queryParams;
+  if (queryParams) {
+    Object.keys(queryParams).forEach(key => {
+      authUrlParams[key] = queryParams[key];
+    });
   }
-  const res = `${endPoint}?${url.toString()}`;
+
+  return createAuthUrl(authConfig.authorizeEndpoint!, authUrlParams, codeChallenge);
+};
+
+export const createAuthUrl = (url: string, authUrlParams: AuthorizeUrlParams, codeChallenge?: string) => {
+  const keys = Object.keys(authUrlParams);
+  const queryParams = new URLSearchParams();
+  keys.forEach(key => {
+    queryParams.append(key, authUrlParams[key]);
+  });
+  if (codeChallenge) queryParams.append('code_challenge', codeChallenge);
+  if (codeChallenge) queryParams.append('code_challenge_method', 'S256');
+
+  const res = `${url}?${queryParams.toString()}`;
   return res;
 };
 
@@ -36,7 +45,7 @@ export const createTokenRequestBody = (authConfig: AuthConfig, code: string, cod
   urlSearchParam.append('grant_type', grantType);
   urlSearchParam.append('code', code);
   if (codeVerifier) urlSearchParam.append('code_verifier', codeVerifier);
-  urlSearchParam.append('redirect_uri', authConfig.redirectUrl);
+  urlSearchParam.append('redirect_uri', authConfig.redirectUri);
   urlSearchParam.append('client_id', authConfig.clientId);
   const body = urlSearchParam.toString();
 
@@ -75,9 +84,8 @@ export const createNonce = (length: number) => {
   return nonce;
 };
 
-export const createDiscoveryUrl = (authConfig: AuthConfig) => {
+export const createDiscoveryUrl = (issuer: string) => {
   const route = '/.well-known/openid-configuration';
-  const issuer = authConfig.issuer;
   const issuerWithoutTrailingSlash = issuer.endsWith('/') ? issuer.slice(0, -1) : issuer;
   return `${issuerWithoutTrailingSlash}${route}`;
 };
