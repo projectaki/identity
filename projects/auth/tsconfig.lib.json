@@ -12,7 +12,8 @@
       "@identity-auth/encoding": ["projects/auth/src/lib/encode-helper.ts"],
       "@identity-auth/hashing": ["projects/auth/src/lib/hash-helper.ts"],
       "@identity-auth/storage": ["projects/auth/src/lib/storage-helper.ts"],
-      "@identity-auth/models": ["projects/auth/src/lib/models.ts"]
+      "@identity-auth/models": ["projects/auth/src/lib/models.ts"],
+      "@identity-auth/jwt": ["projects/auth/src/lib/jwt-helper.ts"]
     }
   },
   "exclude": ["src/test.ts", "**/*.spec.ts"]

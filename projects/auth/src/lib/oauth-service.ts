@@ -1,11 +1,14 @@
 import {
   createAuthUrl,
+  createAuthUrlFromConfig,
   createCodeVerifierCodeChallengePair,
   createDiscoveryUrl,
   createNonce,
   createTokenRequestBody,
+  trimIssuerOfTrailingSlash,
+  validateIdToken,
 } from '@identity-auth/core';
-import { AuthConfig, DiscoveryDocument } from '@identity-auth/models';
+import { AuthConfig, AuthResult, DiscoveryDocument } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
 
 export class OAuthService {
@@ -23,11 +26,13 @@ export class OAuthService {
   login = async () => {
     this.ensureAllConfigIsLoaded();
 
-    const state = createNonce(16);
+    const state = createNonce(32);
+    const nonce = createNonce(32);
     const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
     setAuthStorage('state', state);
+    setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
-    const authUrl = createAuthUrl(this.authConfig, codeChallenge, state);
+    const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
     location.href = authUrl;
   };
 
@@ -44,9 +49,26 @@ export class OAuthService {
    * @param func A callback function which gets called when getting the access token.
    * @returns A Promise which resolves with the access token, or null if there is no access token.
    */
-  getAccessToken = (func?: (x: any) => void): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      const token = getAuthStorage().authResult?.access_token;
+  getAccessToken = (func?: (x: any) => void): Promise<string | null> => {
+    return new Promise<string | null>((resolve, reject) => {
+      const token: string = getAuthStorage().authResult?.access_token;
+      if (token) {
+        resolve(token);
+      } else resolve(null);
+    }).then(x => {
+      if (func) func(x);
+      return x;
+    });
+  };
+
+  /**
+   *
+   * @param func A callback function which gets called when getting the id token.
+   * @returns A Promise which resolves with the id token, or null if there is no id token.
+   */
+  getIdToken = (func?: (x: any) => void): Promise<string | null> => {
+    return new Promise<string | null>((resolve, reject) => {
+      const token = getAuthStorage().authResult?.id_token;
       if (token) {
         resolve(token);
       } else resolve(null);
@@ -63,6 +85,7 @@ export class OAuthService {
    * @returns Promise<boolean>
    */
   handleAuthResult = async (func?: (x: any) => void) => {
+    this.ensureAllConfigIsLoaded();
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
     const x_1 = await this.handleCodeFlowRedirect(params);
@@ -76,10 +99,11 @@ export class OAuthService {
    * @param func A callback function to call after the discovery document is loaded.
    */
   loadDiscoveryDocument = async (func?: (x: DiscoveryDocument) => void): Promise<void> => {
-    const url = createDiscoveryUrl(this.authConfig);
+    const url = createDiscoveryUrl(this.authConfig.issuer);
     const response = await fetch(url, { method: 'GET' });
     const discoveryDocument = await response.json();
-    this.validateDiscoveryDocument(discoveryDocument);
+    if (this.authConfig.validateDiscovery == null || !!this.authConfig.validateDiscovery)
+      this.validateDiscoveryDocument(discoveryDocument);
     this.discoveryDocument = discoveryDocument;
     this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
     this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
@@ -101,16 +125,23 @@ export class OAuthService {
 
   private handleCodeFlowRedirect = (params: URLSearchParams): Promise<boolean> => {
     return new Promise(async (resolve, reject) => {
+      if (params.has('error')) {
+        reject(params.get('error'));
+      }
       if (!params.has('code')) {
         return resolve(false);
       }
       const code = params.get('code')!;
 
       try {
-        const data = await this.fetchAccessToken(code);
+        const data = await this.fetchTokens(code);
+        const { id_token } = data;
+        const { nonce } = getAuthStorage();
+        validateIdToken(id_token, this.authConfig, nonce);
         setAuthStorage('authResult', data);
         removeFromAuthStorage('codeVerifier');
-        document.location.href = this.authConfig.redirectUrl;
+        removeFromAuthStorage('nonce');
+        document.location.href = this.authConfig.redirectUri;
         return resolve(true);
       } catch (err) {
         return reject(err);
@@ -118,7 +149,7 @@ export class OAuthService {
     });
   };
 
-  private fetchAccessToken = async (code: string) => {
+  private fetchTokens = async (code: string): Promise<AuthResult> => {
     const { codeVerifier } = getAuthStorage();
     const body = createTokenRequestBody(this.authConfig, code, codeVerifier);
     const response = await fetch(this.authConfig.tokenEndpoint!, {
@@ -152,9 +183,12 @@ export class OAuthService {
   private validateDiscoveryDocument(discoveryDocument: DiscoveryDocument) {
     if (!discoveryDocument) throw new Error('Discovery document is required!');
 
-    const issuerWithoutTrailingSlash = discoveryDocument.issuer.endsWith('/')
-      ? discoveryDocument.issuer.slice(0, -1)
-      : discoveryDocument.issuer;
+    const issuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(discoveryDocument.issuer);
     if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
+  }
+
+  // Test method remove later
+  validate(idToken: string) {
+    validateIdToken(idToken, this.authConfig);
   }
 }
