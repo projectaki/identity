@@ -85,6 +85,7 @@ export class OAuthService {
    * @returns Promise<boolean>
    */
   handleAuthResult = async (func?: (x: any) => void) => {
+    this.ensureAllConfigIsLoaded();
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
     const x_1 = await this.handleCodeFlowRedirect(params);
@@ -124,6 +125,9 @@ export class OAuthService {
 
   private handleCodeFlowRedirect = (params: URLSearchParams): Promise<boolean> => {
     return new Promise(async (resolve, reject) => {
+      if (params.has('error')) {
+        reject(params.get('error'));
+      }
       if (!params.has('code')) {
         return resolve(false);
       }
@@ -131,8 +135,12 @@ export class OAuthService {
 
       try {
         const data = await this.fetchTokens(code);
+        const { id_token } = data;
+        const { nonce } = getAuthStorage();
+        validateIdToken(id_token, this.authConfig, nonce);
         setAuthStorage('authResult', data);
         removeFromAuthStorage('codeVerifier');
+        removeFromAuthStorage('nonce');
         document.location.href = this.authConfig.redirectUri;
         return resolve(true);
       } catch (err) {
@@ -179,6 +187,7 @@ export class OAuthService {
     if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
   }
 
+  // Test method remove later
   validate(idToken: string) {
     validateIdToken(idToken, this.authConfig);
   }
