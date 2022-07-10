@@ -8,10 +8,16 @@ import { map } from 'rxjs';
 @Component({
   selector: 'app-home',
   template: `
-    <button (click)="auth.login()">authorize</button>
-    <ng-container *ngIf="idTokenString$ | async as idtokenstring">
-      <button (click)="validate(idtokenstring)">validate</button>
+    <ng-container *ngIf="auth.isAuthenticated$ | async as authed; else loggedOut">
+      <button (click)="auth.logout()">Log out</button>
     </ng-container>
+    <ng-template #loggedOut>
+      <button (click)="auth.login()">authorize</button>
+      <ng-container *ngIf="idTokenString$ | async as idtokenstring">
+        <button (click)="validate(idtokenstring)">validate</button>
+      </ng-container>
+    </ng-template>
+
     <ng-container *ngIf="idToken$ | async as idtoken">
       <h2>Id token</h2>
       <pre>{{ idtoken.header | json }}</pre>

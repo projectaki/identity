@@ -3,6 +3,7 @@ import {
   createAuthUrlFromConfig,
   createCodeVerifierCodeChallengePair,
   createDiscoveryUrl,
+  createLogoutUrl,
   createNonce,
   createTokenRequestBody,
   trimIssuerOfTrailingSlash,
@@ -12,8 +13,10 @@ import { AuthConfig, AuthResult, DiscoveryDocument } from '@identity-auth/models
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
 
 export class OAuthService {
+  public isAuthenticated: boolean = false;
   private authConfig!: AuthConfig;
   private discoveryDocument!: DiscoveryDocument;
+
   /**
    * Creates the auth URL and redirects to it.
    *
@@ -34,6 +37,24 @@ export class OAuthService {
     setAuthStorage('codeVerifier', codeVerifier);
     const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
     location.href = authUrl;
+  };
+
+  localLogout = (func?: () => void) => {
+    removeFromAuthStorage('authResult');
+    removeFromAuthStorage('nonce');
+    removeFromAuthStorage('codeVerifier');
+    this.isAuthenticated = false;
+    if (func) func();
+  };
+
+  logout = (func?: () => void) => {
+    this.localLogout();
+    const logoutUrl = createLogoutUrl(this.authConfig, {
+      returnTo: this.authConfig.postLogoutRedirectUri,
+      client_id: this.authConfig.clientId,
+    });
+    location.href = logoutUrl;
+    if (func) func();
   };
 
   /**
@@ -69,9 +90,13 @@ export class OAuthService {
   getIdToken = (func?: (x: any) => void): Promise<string | null> => {
     return new Promise<string | null>((resolve, reject) => {
       const token = getAuthStorage().authResult?.id_token;
-      if (token) {
+      const isValid = token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
+      if (isValid) {
         resolve(token);
-      } else resolve(null);
+      } else {
+        this.isAuthenticated = false;
+        resolve(null);
+      }
     }).then(x => {
       if (func) func(x);
       return x;
@@ -89,7 +114,9 @@ export class OAuthService {
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
     const x_1 = await this.handleCodeFlowRedirect(params);
+    this.isAuthenticated = true;
     if (func) func(x_1);
+
     return x_1;
   };
 
@@ -139,9 +166,6 @@ export class OAuthService {
         const { nonce } = getAuthStorage();
         validateIdToken(id_token, this.authConfig, nonce);
         setAuthStorage('authResult', data);
-        removeFromAuthStorage('codeVerifier');
-        removeFromAuthStorage('nonce');
-        document.location.href = this.authConfig.redirectUri;
         return resolve(true);
       } catch (err) {
         return reject(err);
