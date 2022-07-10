@@ -101,7 +101,7 @@ export const trimIssuerOfTrailingSlash = (issuer: string) => {
   return issuer.endsWith('/') ? issuer.slice(0, -1) : issuer;
 };
 
-export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?: string) => {
+export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?: string): boolean => {
   const { header, payload, signature } = decodeJWt(idToken);
 
   checkEncryption();
@@ -112,9 +112,11 @@ export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?:
   validateMacAlg();
   validateExpClaim();
   validateIatClaim();
-  validateNonce();
+  validateNonce(nonce);
   validateAcrClaim();
   validateAuthTimeClaim();
+
+  return true;
 
   /*
   1. If the ID Token is encrypted, decrypt it using the keys and algorithms that the Client specified during Registration 
@@ -282,4 +284,19 @@ or if it contains additional audiences not trusted by the Client.
       throw new Error('Token is not yet valid');
     }
   }
+};
+
+export const createLogoutUrl = (authConfig: AuthConfig, queryParams?: { [key: string]: string }) => {
+  const { endsessionEndpoint } = authConfig;
+  if (!endsessionEndpoint) {
+    throw new Error('Logout url is required');
+  }
+  if (!queryParams) return endsessionEndpoint;
+
+  const searchParams = new URLSearchParams();
+  Object.keys(queryParams).forEach(key => {
+    searchParams.set(key, queryParams[key]);
+  });
+
+  return `${endsessionEndpoint}?${searchParams.toString()}`;
 };

@@ -2,10 +2,12 @@ export interface AuthConfig {
   responseType: 'code';
   clientId: string;
   redirectUri: string;
+  postLogoutRedirectUri: string;
   issuer: string;
   scope: string;
   authorizeEndpoint?: string;
   tokenEndpoint?: string;
+  endsessionEndpoint?: string;
   jwks?: any;
   queryParams?: { [key: string]: string };
   validateDiscovery?: boolean;
