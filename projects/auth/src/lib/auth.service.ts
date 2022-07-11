@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { AuthConfig } from '@identity-auth/models';
-import { BehaviorSubject, from, Subject } from 'rxjs';
+import { AuthConfig, AuthResult } from '@identity-auth/models';
+import { BehaviorSubject, catchError, from, Subject, throwError } from 'rxjs';
 import { OAuthService } from './oauth-service';
 
 @Injectable()
@@ -32,14 +32,13 @@ export class AuthService {
   };
 
   handleAuthResult = () => {
-    const cb = (x: boolean) => {
-      if (x) {
-        this.authComplete.next(true);
-        this.authComplete.complete();
+    const cb = (x: AuthResult) => {
+      this.authComplete.next(true);
+      this.authComplete.complete();
 
-        this.isAuthenticated.next(true);
-      }
+      this.isAuthenticated.next(true);
     };
+
     return from(this.auth.handleAuthResult(cb));
   };
 
@@ -48,14 +47,16 @@ export class AuthService {
   };
 
   getIdToken = () => {
-    const cb = (x: boolean) => {
-      if (x) {
-        this.isAuthenticated.next(true);
-      } else {
-        this.isAuthenticated.next(false);
-      }
+    const cb = (x: string) => {
+      console.log('id token', x);
     };
-    return from(this.auth.getIdToken(cb));
+    return from(this.auth.getIdToken(cb)).pipe(
+      catchError(() => {
+        this.isAuthenticated.next(false);
+
+        return throwError(() => 'No id token found');
+      })
+    );
   };
 
   loadDiscoveryDocument = () => {

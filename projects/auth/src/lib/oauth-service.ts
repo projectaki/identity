@@ -66,41 +66,23 @@ export class OAuthService {
     this.authConfig = authConfig;
   };
 
-  /**
-   *
-   * @param func A callback function which gets called when getting the access token.
-   * @returns A Promise which resolves with the access token, or null if there is no access token.
-   */
-  getAccessToken = (func?: (x: any) => void): Promise<string | null> => {
-    return new Promise<string | null>((resolve, reject) => {
-      const token: string = getAuthStorage().authResult?.access_token;
-      if (token) {
-        resolve(token);
-      } else resolve(null);
-    }).then(x => {
-      if (func) func(x);
-      return x;
-    });
+  getAccessToken = (func?: (x: any) => void): string => {
+    const token: string = getAuthStorage().authResult?.access_token;
+    if (token) {
+      if (func) func(token);
+      return token;
+    }
+    throw new Error('No access token found!');
   };
 
-  /**
-   *
-   * @param func A callback function which gets called when getting the id token.
-   * @returns A Promise which resolves with the id token, or null if there is no id token.
-   */
-  getIdToken = (func?: (x: any) => void): Promise<string | null> => {
-    return new Promise<string | null>((resolve, reject) => {
-      const token = getAuthStorage().authResult?.id_token;
-      const isValid = this.hasValidIdToken(token);
-      if (isValid) {
-        resolve(token);
-      } else {
-        reject(new Error('Invalid id token'));
-      }
-    }).then(x => {
-      if (func) func(x);
-      return x;
-    });
+  getIdToken = (func?: (x: string) => void): string => {
+    const token: string = getAuthStorage().authResult?.id_token;
+    const isValid = this.hasValidIdToken(token);
+    if (isValid) {
+      if (func) func(token);
+      return token;
+    }
+    throw new Error('No valid id token found!');
   };
 
   hasValidIdToken = (inputToken?: string): boolean => {
@@ -116,15 +98,20 @@ export class OAuthService {
    * @param func A callback function to call after the auth flow is completed.
    * @returns Promise<boolean>
    */
-  handleAuthResult = async (func?: (x: any) => void) => {
+  handleAuthResult = async (func?: (x: AuthResult) => void) => {
     this.ensureAllConfigIsLoaded();
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
-    const x_1 = await this.handleCodeFlowRedirect(params);
-    this.isAuthenticated = true;
-    if (func) func(x_1);
+    try {
+      const x_1 = await this.handleCodeFlowRedirect(params);
+      this.isAuthenticated = true;
+      if (func) func(x_1);
 
-    return x_1;
+      return x_1;
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
   };
 
   /**
@@ -134,20 +121,25 @@ export class OAuthService {
    */
   loadDiscoveryDocument = async (func?: (x: DiscoveryDocument) => void): Promise<void> => {
     const url = createDiscoveryUrl(this.authConfig.issuer);
-    const response = await fetch(url, { method: 'GET' });
-    const discoveryDocument = await response.json();
-    if (this.authConfig.validateDiscovery == null || !!this.authConfig.validateDiscovery)
-      this.validateDiscoveryDocument(discoveryDocument);
-    this.discoveryDocument = discoveryDocument;
-    this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
-    this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
+    try {
+      const response = await fetch(url, { method: 'GET' });
+      const discoveryDocument = await response.json();
+      if (this.authConfig.validateDiscovery == null || !!this.authConfig.validateDiscovery)
+        this.validateDiscoveryDocument(discoveryDocument);
+      this.discoveryDocument = discoveryDocument;
+      this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
+      this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
 
-    const jwks = await this.loadJwks();
-    this.authConfig.jwks = jwks;
-    console.log(jwks);
+      const jwks = await this.loadJwks();
+      this.authConfig.jwks = jwks;
+      console.log(jwks);
 
-    if (func) func(discoveryDocument);
-    console.log(discoveryDocument);
+      if (func) func(discoveryDocument);
+      console.log(discoveryDocument);
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
   };
 
   private removeLocalSession = () => {
@@ -159,46 +151,54 @@ export class OAuthService {
 
   private loadJwks = async () => {
     const url = `${this.discoveryDocument.jwks_uri}`;
-    const response = await fetch(url, { method: 'GET' });
-    const jwks = await response.json();
-    return jwks;
+    try {
+      const response = await fetch(url, { method: 'GET' });
+      const jwks = await response.json();
+
+      return jwks;
+    } catch (e) {
+      throw e;
+    }
   };
 
-  private handleCodeFlowRedirect = (params: URLSearchParams): Promise<boolean> => {
-    return new Promise(async (resolve, reject) => {
-      if (params.has('error')) {
-        reject(params.get('error'));
-      }
-      if (!params.has('code')) {
-        return resolve(false);
-      }
-      const code = params.get('code')!;
+  private handleCodeFlowRedirect = async (params: URLSearchParams): Promise<AuthResult> => {
+    if (params.has('error')) {
+      throw new Error(params.get('error')!);
+    }
+    if (!params.has('code')) {
+      throw new Error('No code param in the redirect');
+    }
+    const code = params.get('code')!;
 
-      try {
-        const data = await this.fetchTokens(code);
-        const { id_token } = data;
-        const { nonce } = getAuthStorage();
-        validateIdToken(id_token, this.authConfig, nonce);
-        setAuthStorage('authResult', data);
-        return resolve(true);
-      } catch (err) {
-        return reject(err);
-      }
-    });
+    try {
+      const data = await this.fetchTokens(code);
+      const { id_token } = data;
+      const { nonce } = getAuthStorage();
+      validateIdToken(id_token, this.authConfig, nonce);
+      setAuthStorage('authResult', data);
+
+      return data;
+    } catch (err) {
+      throw err;
+    }
   };
 
   private fetchTokens = async (code: string): Promise<AuthResult> => {
     const { codeVerifier } = getAuthStorage();
     const body = createTokenRequestBody(this.authConfig, code, codeVerifier);
-    const response = await fetch(this.authConfig.tokenEndpoint!, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body,
-    });
+    try {
+      const response = await fetch(this.authConfig.tokenEndpoint!, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body,
+      });
 
-    return response.json();
+      return response.json();
+    } catch (err) {
+      throw err;
+    }
   };
 
   private checkState = (params: URLSearchParams) => {
