@@ -1,14 +1,14 @@
 import { Injectable } from '@angular/core';
 import { AuthConfig, AuthResult } from '@identity-auth/models';
-import { BehaviorSubject, catchError, from, Subject, throwError } from 'rxjs';
+import { BehaviorSubject, catchError, filter, from, Observable, of, Subject, tap, throwError } from 'rxjs';
 import { OAuthService } from './oauth-service';
 
 @Injectable()
 export class AuthService {
   auth = new OAuthService();
 
-  private authComplete = new Subject<boolean>();
-  public authComplete$ = this.authComplete.asObservable();
+  private authComplete = new BehaviorSubject<boolean>(false);
+  public authComplete$ = this.authComplete.asObservable().pipe(filter(x => x));
 
   private isAuthenticated = new BehaviorSubject<boolean>(false);
   public isAuthenticated$ = this.isAuthenticated.asObservable();
@@ -32,25 +32,29 @@ export class AuthService {
   };
 
   handleAuthResult = () => {
-    const cb = (x: AuthResult) => {
-      this.authComplete.next(true);
-      this.authComplete.complete();
-
-      this.isAuthenticated.next(true);
+    const cb = (x: AuthResult | void) => {
+      if (x) {
+        this.authComplete.next(true);
+        this.authComplete.complete();
+      }
+      return x;
     };
 
-    return from(this.auth.handleAuthResult(cb));
+    return from(this.auth.handleAuthResult(cb)).pipe(
+      filter(x => !!x),
+      tap(x => this.isAuthenticated.next(true))
+    );
   };
 
   getAccessToken = () => {
-    return from(this.auth.getAccessToken());
+    return of(this.auth.getAccessToken());
   };
 
   getIdToken = () => {
     const cb = (x: string) => {
       console.log('id token', x);
     };
-    return from(this.auth.getIdToken(cb)).pipe(
+    return of(this.auth.getIdToken(cb)).pipe(
       catchError(() => {
         this.isAuthenticated.next(false);
 

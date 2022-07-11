@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { AuthService } from 'projects/auth/src/public-api';
 
 @Component({
@@ -10,9 +10,13 @@ import { AuthService } from 'projects/auth/src/public-api';
 })
 export class AppComponent {
   protected auth = inject(AuthService);
+  private router = inject(Router);
 
   ngOnInit(): void {
     console.log('AppComponent.ngOnInit');
+    this.auth.handleAuthResult().subscribe(x => {
+      console.log('handled auth result', x);
+    });
     this.auth.authComplete$.subscribe(x => {
       console.log('auth complete', x);
     });

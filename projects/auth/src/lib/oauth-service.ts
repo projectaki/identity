@@ -66,17 +66,21 @@ export class OAuthService {
     this.authConfig = authConfig;
   };
 
-  getAccessToken = (func?: (x: any) => void): string => {
+  getAccessToken = (func?: (x: any) => void): string | null => {
     const token: string = getAuthStorage().authResult?.access_token;
     if (token) {
-      if (func) func(token);
       return token;
     }
-    throw new Error('No access token found!');
+    if (func) func(token);
+    return null;
   };
 
-  getIdToken = (func?: (x: string) => void): string => {
+  getIdToken = (func?: (x: string) => void): string | null => {
     const token: string = getAuthStorage().authResult?.id_token;
+    if (!token) {
+      if (func) func(token);
+      return null;
+    }
     const isValid = this.hasValidIdToken(token);
     if (isValid) {
       if (func) func(token);
@@ -98,15 +102,19 @@ export class OAuthService {
    * @param func A callback function to call after the auth flow is completed.
    * @returns Promise<boolean>
    */
-  handleAuthResult = async (func?: (x: AuthResult) => void) => {
+  handleAuthResult = async (func?: (x: AuthResult) => void): Promise<AuthResult | void> => {
     this.ensureAllConfigIsLoaded();
+    if (this.hasValidIdToken()) {
+      this.isAuthenticated = true;
+      return getAuthStorage().authResult;
+    }
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
     try {
       const x_1 = await this.handleCodeFlowRedirect(params);
       this.isAuthenticated = true;
-      if (func) func(x_1);
-
+      if (x_1) location.href = this.authConfig.redirectUri;
+      if (func) func(x_1!);
       return x_1;
     } catch (e) {
       console.error(e);
@@ -161,12 +169,12 @@ export class OAuthService {
     }
   };
 
-  private handleCodeFlowRedirect = async (params: URLSearchParams): Promise<AuthResult> => {
+  private handleCodeFlowRedirect = async (params: URLSearchParams): Promise<AuthResult | void> => {
     if (params.has('error')) {
       throw new Error(params.get('error')!);
     }
     if (!params.has('code')) {
-      throw new Error('No code param in the redirect');
+      return;
     }
     const code = params.get('code')!;
 
