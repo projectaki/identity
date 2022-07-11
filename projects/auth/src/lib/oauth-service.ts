@@ -26,7 +26,7 @@ export class OAuthService {
    * If the discovery document was not loaded on bootstrap, will load it first.
    * @throws Error if the discovery document was not loaded on bootstrap AND required endpoints are not set explicitly.
    */
-  login = async () => {
+  login = async (func?: () => void) => {
     this.ensureAllConfigIsLoaded();
 
     const state = createNonce(32);
@@ -37,19 +37,20 @@ export class OAuthService {
     setAuthStorage('codeVerifier', codeVerifier);
     const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
     location.href = authUrl;
+    if (func) func();
   };
 
   localLogout = (func?: () => void) => {
-    removeFromAuthStorage('authResult');
-    removeFromAuthStorage('nonce');
-    removeFromAuthStorage('codeVerifier');
-    this.isAuthenticated = false;
+    this.removeLocalSession();
+    location.href = this.authConfig.postLogoutRedirectUri;
     if (func) func();
   };
 
   logout = (func?: () => void) => {
-    this.localLogout();
-    const logoutUrl = createLogoutUrl(this.authConfig, {
+    if (!this.authConfig.endsessionEndpoint) throw new Error('Endsession endpoint is not set!');
+
+    this.removeLocalSession();
+    const logoutUrl = createLogoutUrl(this.authConfig.endsessionEndpoint, {
       returnTo: this.authConfig.postLogoutRedirectUri,
       client_id: this.authConfig.clientId,
     });
@@ -65,42 +66,34 @@ export class OAuthService {
     this.authConfig = authConfig;
   };
 
-  /**
-   *
-   * @param func A callback function which gets called when getting the access token.
-   * @returns A Promise which resolves with the access token, or null if there is no access token.
-   */
-  getAccessToken = (func?: (x: any) => void): Promise<string | null> => {
-    return new Promise<string | null>((resolve, reject) => {
-      const token: string = getAuthStorage().authResult?.access_token;
-      if (token) {
-        resolve(token);
-      } else resolve(null);
-    }).then(x => {
-      if (func) func(x);
-      return x;
-    });
+  getAccessToken = (func?: (x: any) => void): string | null => {
+    const token: string = getAuthStorage().authResult?.access_token;
+    if (token) {
+      return token;
+    }
+    if (func) func(token);
+    return null;
   };
 
-  /**
-   *
-   * @param func A callback function which gets called when getting the id token.
-   * @returns A Promise which resolves with the id token, or null if there is no id token.
-   */
-  getIdToken = (func?: (x: any) => void): Promise<string | null> => {
-    return new Promise<string | null>((resolve, reject) => {
-      const token = getAuthStorage().authResult?.id_token;
-      const isValid = token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
-      if (isValid) {
-        resolve(token);
-      } else {
-        this.isAuthenticated = false;
-        resolve(null);
-      }
-    }).then(x => {
-      if (func) func(x);
-      return x;
-    });
+  getIdToken = (func?: (x: string) => void): string | null => {
+    const token: string = getAuthStorage().authResult?.id_token;
+    if (!token) {
+      if (func) func(token);
+      return null;
+    }
+    const isValid = this.hasValidIdToken(token);
+    if (isValid) {
+      if (func) func(token);
+      return token;
+    }
+    throw new Error('No valid id token found!');
+  };
+
+  hasValidIdToken = (inputToken?: string): boolean => {
+    const token = inputToken ?? getAuthStorage().authResult?.id_token;
+    const isValid = token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
+
+    return isValid;
   };
 
   /**
@@ -109,15 +102,24 @@ export class OAuthService {
    * @param func A callback function to call after the auth flow is completed.
    * @returns Promise<boolean>
    */
-  handleAuthResult = async (func?: (x: any) => void) => {
+  handleAuthResult = async (func?: (x: AuthResult) => void): Promise<AuthResult | void> => {
     this.ensureAllConfigIsLoaded();
+    if (this.hasValidIdToken()) {
+      this.isAuthenticated = true;
+      return getAuthStorage().authResult;
+    }
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
-    const x_1 = await this.handleCodeFlowRedirect(params);
-    this.isAuthenticated = true;
-    if (func) func(x_1);
-
-    return x_1;
+    try {
+      const x_1 = await this.handleCodeFlowRedirect(params);
+      this.isAuthenticated = true;
+      if (x_1) location.href = this.authConfig.redirectUri;
+      if (func) func(x_1!);
+      return x_1;
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
   };
 
   /**
@@ -127,64 +129,84 @@ export class OAuthService {
    */
   loadDiscoveryDocument = async (func?: (x: DiscoveryDocument) => void): Promise<void> => {
     const url = createDiscoveryUrl(this.authConfig.issuer);
-    const response = await fetch(url, { method: 'GET' });
-    const discoveryDocument = await response.json();
-    if (this.authConfig.validateDiscovery == null || !!this.authConfig.validateDiscovery)
-      this.validateDiscoveryDocument(discoveryDocument);
-    this.discoveryDocument = discoveryDocument;
-    this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
-    this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
+    try {
+      const response = await fetch(url, { method: 'GET' });
+      const discoveryDocument = await response.json();
+      if (this.authConfig.validateDiscovery == null || !!this.authConfig.validateDiscovery)
+        this.validateDiscoveryDocument(discoveryDocument);
+      this.discoveryDocument = discoveryDocument;
+      this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
+      this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
 
-    const jwks = await this.loadJwks();
-    this.authConfig.jwks = jwks;
-    console.log(jwks);
+      const jwks = await this.loadJwks();
+      this.authConfig.jwks = jwks;
+      console.log(jwks);
 
-    if (func) func(discoveryDocument);
-    console.log(discoveryDocument);
+      if (func) func(discoveryDocument);
+      console.log(discoveryDocument);
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
+  };
+
+  private removeLocalSession = () => {
+    removeFromAuthStorage('authResult');
+    removeFromAuthStorage('nonce');
+    removeFromAuthStorage('codeVerifier');
+    this.isAuthenticated = false;
   };
 
   private loadJwks = async () => {
     const url = `${this.discoveryDocument.jwks_uri}`;
-    const response = await fetch(url, { method: 'GET' });
-    const jwks = await response.json();
-    return jwks;
+    try {
+      const response = await fetch(url, { method: 'GET' });
+      const jwks = await response.json();
+
+      return jwks;
+    } catch (e) {
+      throw e;
+    }
   };
 
-  private handleCodeFlowRedirect = (params: URLSearchParams): Promise<boolean> => {
-    return new Promise(async (resolve, reject) => {
-      if (params.has('error')) {
-        reject(params.get('error'));
-      }
-      if (!params.has('code')) {
-        return resolve(false);
-      }
-      const code = params.get('code')!;
+  private handleCodeFlowRedirect = async (params: URLSearchParams): Promise<AuthResult | void> => {
+    if (params.has('error')) {
+      throw new Error(params.get('error')!);
+    }
+    if (!params.has('code')) {
+      return;
+    }
+    const code = params.get('code')!;
 
-      try {
-        const data = await this.fetchTokens(code);
-        const { id_token } = data;
-        const { nonce } = getAuthStorage();
-        validateIdToken(id_token, this.authConfig, nonce);
-        setAuthStorage('authResult', data);
-        return resolve(true);
-      } catch (err) {
-        return reject(err);
-      }
-    });
+    try {
+      const data = await this.fetchTokens(code);
+      const { id_token } = data;
+      const { nonce } = getAuthStorage();
+      validateIdToken(id_token, this.authConfig, nonce);
+      setAuthStorage('authResult', data);
+
+      return data;
+    } catch (err) {
+      throw err;
+    }
   };
 
   private fetchTokens = async (code: string): Promise<AuthResult> => {
     const { codeVerifier } = getAuthStorage();
     const body = createTokenRequestBody(this.authConfig, code, codeVerifier);
-    const response = await fetch(this.authConfig.tokenEndpoint!, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body,
-    });
+    try {
+      const response = await fetch(this.authConfig.tokenEndpoint!, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body,
+      });
 
-    return response.json();
+      return response.json();
+    } catch (err) {
+      throw err;
+    }
   };
 
   private checkState = (params: URLSearchParams) => {

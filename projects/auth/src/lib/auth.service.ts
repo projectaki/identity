@@ -1,14 +1,14 @@
 import { Injectable } from '@angular/core';
-import { AuthConfig } from '@identity-auth/models';
-import { BehaviorSubject, from, Subject } from 'rxjs';
+import { AuthConfig, AuthResult } from '@identity-auth/models';
+import { BehaviorSubject, catchError, filter, from, Observable, of, Subject, tap, throwError } from 'rxjs';
 import { OAuthService } from './oauth-service';
 
 @Injectable()
 export class AuthService {
   auth = new OAuthService();
 
-  private authComplete = new Subject<boolean>();
-  public authComplete$ = this.authComplete.asObservable();
+  private authComplete = new BehaviorSubject<boolean>(false);
+  public authComplete$ = this.authComplete.asObservable().pipe(filter(x => x));
 
   private isAuthenticated = new BehaviorSubject<boolean>(false);
   public isAuthenticated$ = this.isAuthenticated.asObservable();
@@ -32,30 +32,35 @@ export class AuthService {
   };
 
   handleAuthResult = () => {
-    const cb = (x: boolean) => {
+    const cb = (x: AuthResult | void) => {
       if (x) {
         this.authComplete.next(true);
         this.authComplete.complete();
-
-        this.isAuthenticated.next(true);
       }
+      return x;
     };
-    return from(this.auth.handleAuthResult(cb));
+
+    return from(this.auth.handleAuthResult(cb)).pipe(
+      filter(x => !!x),
+      tap(x => this.isAuthenticated.next(true))
+    );
   };
 
   getAccessToken = () => {
-    return from(this.auth.getAccessToken());
+    return of(this.auth.getAccessToken());
   };
 
   getIdToken = () => {
-    const cb = (x: boolean) => {
-      if (x) {
-        this.isAuthenticated.next(true);
-      } else {
-        this.isAuthenticated.next(false);
-      }
+    const cb = (x: string) => {
+      console.log('id token', x);
     };
-    return from(this.auth.getIdToken(cb));
+    return of(this.auth.getIdToken(cb)).pipe(
+      catchError(() => {
+        this.isAuthenticated.next(false);
+
+        return throwError(() => 'No id token found');
+      })
+    );
   };
 
   loadDiscoveryDocument = () => {
