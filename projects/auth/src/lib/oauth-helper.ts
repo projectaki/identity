@@ -286,11 +286,7 @@ or if it contains additional audiences not trusted by the Client.
   }
 };
 
-export const createLogoutUrl = (authConfig: AuthConfig, queryParams?: { [key: string]: string }) => {
-  const { endsessionEndpoint } = authConfig;
-  if (!endsessionEndpoint) {
-    throw new Error('Logout url is required');
-  }
+export const createLogoutUrl = (endsessionEndpoint: string, queryParams?: { [key: string]: string }) => {
   if (!queryParams) return endsessionEndpoint;
 
   const searchParams = new URLSearchParams();

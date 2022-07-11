@@ -26,7 +26,7 @@ export class OAuthService {
    * If the discovery document was not loaded on bootstrap, will load it first.
    * @throws Error if the discovery document was not loaded on bootstrap AND required endpoints are not set explicitly.
    */
-  login = async () => {
+  login = async (func?: () => void) => {
     this.ensureAllConfigIsLoaded();
 
     const state = createNonce(32);
@@ -37,19 +37,20 @@ export class OAuthService {
     setAuthStorage('codeVerifier', codeVerifier);
     const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
     location.href = authUrl;
+    if (func) func();
   };
 
   localLogout = (func?: () => void) => {
-    removeFromAuthStorage('authResult');
-    removeFromAuthStorage('nonce');
-    removeFromAuthStorage('codeVerifier');
-    this.isAuthenticated = false;
+    this.removeLocalSession();
+    location.href = this.authConfig.postLogoutRedirectUri;
     if (func) func();
   };
 
   logout = (func?: () => void) => {
-    this.localLogout();
-    const logoutUrl = createLogoutUrl(this.authConfig, {
+    if (!this.authConfig.endsessionEndpoint) throw new Error('Endsession endpoint is not set!');
+
+    this.removeLocalSession();
+    const logoutUrl = createLogoutUrl(this.authConfig.endsessionEndpoint, {
       returnTo: this.authConfig.postLogoutRedirectUri,
       client_id: this.authConfig.clientId,
     });
@@ -90,17 +91,23 @@ export class OAuthService {
   getIdToken = (func?: (x: any) => void): Promise<string | null> => {
     return new Promise<string | null>((resolve, reject) => {
       const token = getAuthStorage().authResult?.id_token;
-      const isValid = token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
+      const isValid = this.hasValidIdToken(token);
       if (isValid) {
         resolve(token);
       } else {
-        this.isAuthenticated = false;
-        resolve(null);
+        reject(new Error('Invalid id token'));
       }
     }).then(x => {
       if (func) func(x);
       return x;
     });
+  };
+
+  hasValidIdToken = (inputToken?: string): boolean => {
+    const token = inputToken ?? getAuthStorage().authResult?.id_token;
+    const isValid = token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
+
+    return isValid;
   };
 
   /**
@@ -141,6 +148,13 @@ export class OAuthService {
 
     if (func) func(discoveryDocument);
     console.log(discoveryDocument);
+  };
+
+  private removeLocalSession = () => {
+    removeFromAuthStorage('authResult');
+    removeFromAuthStorage('nonce');
+    removeFromAuthStorage('codeVerifier');
+    this.isAuthenticated = false;
   };
 
   private loadJwks = async () => {
