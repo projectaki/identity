@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { AuthConfig, AuthResult } from '@identity-auth/models';
 import { BehaviorSubject, catchError, filter, from, Observable, of, Subject, tap, throwError } from 'rxjs';
+import { AUTH_CONFIG } from './injection-tokens';
 import { OAuthService } from './oauth-service';
 
 @Injectable()
@@ -12,6 +13,8 @@ export class AuthService {
 
   private isAuthenticated = new BehaviorSubject<boolean>(false);
   public isAuthenticated$ = this.isAuthenticated.asObservable();
+
+  private config = inject(AUTH_CONFIG);
 
   login = () => {
     this.auth.login();
@@ -27,23 +30,16 @@ export class AuthService {
     this.auth.localLogout(cb);
   };
 
-  setAuthConfig = (authConfig: AuthConfig) => {
-    this.auth.setAuthConfig(authConfig);
-  };
-
-  handleAuthResult = () => {
-    const cb = (x: AuthResult | void) => {
+  initAuth = () => {
+    const cb_1 = (x: boolean) => this.isAuthenticated.next(x);
+    const cb_2 = (x: AuthResult | void) => {
       if (x) {
         this.authComplete.next(true);
         this.authComplete.complete();
       }
       return x;
     };
-
-    return from(this.auth.handleAuthResult(cb)).pipe(
-      filter(x => !!x),
-      tap(x => this.isAuthenticated.next(true))
-    );
+    return this.auth.initAuth(this.config, cb_1, cb_2);
   };
 
   getAccessToken = () => {
@@ -63,7 +59,7 @@ export class AuthService {
     );
   };
 
-  loadDiscoveryDocument = () => {
-    return from(this.auth.loadDiscoveryDocument());
+  invokeAfterAuthHandled = (action: () => void) => {
+    this.auth.invokeAfterAuthHandled(action);
   };
 }

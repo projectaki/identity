@@ -14,9 +14,7 @@ export class AppComponent {
 
   ngOnInit(): void {
     console.log('AppComponent.ngOnInit');
-    this.auth.handleAuthResult().subscribe(x => {
-      console.log('handled auth result', x);
-    });
+
     this.auth.authComplete$.subscribe(x => {
       console.log('auth complete', x);
     });

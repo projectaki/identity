@@ -11,6 +11,7 @@ export interface AuthConfig {
   jwks?: any;
   queryParams?: { [key: string]: string };
   validateDiscovery?: boolean;
+  discovery?: boolean;
 }
 
 export interface AuthorizeUrlParams {
