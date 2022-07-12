@@ -102,24 +102,41 @@ export class OAuthService {
    * @param func A callback function to call after the auth flow is completed.
    * @returns Promise<boolean>
    */
-  handleAuthResult = async (func?: (x: AuthResult) => void): Promise<AuthResult | void> => {
+  handleAuthResult = async (): Promise<AuthResult | void> => {
     this.ensureAllConfigIsLoaded();
-    if (this.hasValidIdToken()) {
-      this.isAuthenticated = true;
-      return getAuthStorage().authResult;
-    }
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
     try {
-      const x_1 = await this.handleCodeFlowRedirect(params);
-      this.isAuthenticated = true;
-      if (x_1) location.href = this.authConfig.redirectUri;
-      if (func) func(x_1!);
-      return x_1;
+      if (this.authConfig.responseType === 'code') {
+        const x_1 = await this.handleCodeFlowRedirect(params);
+        if (x_1) location.href = this.authConfig.redirectUri;
+
+        return x_1;
+      }
     } catch (e) {
       console.error(e);
       throw e;
     }
+  };
+
+  initAuth = (authConfig: AuthConfig, f_1?: (x: boolean) => void, f_2?: (x: AuthResult | void) => void) => {
+    return () =>
+      new Promise<void>(async (resolve, reject) => {
+        this.setAuthConfig(authConfig);
+        try {
+          if (authConfig.discovery == null || authConfig.discovery) {
+            await this.loadDiscoveryDocument();
+          }
+          this.evalLocalSession(f_1);
+          const url = location.href;
+          if (url.startsWith(authConfig.redirectUri)) {
+            this.handleAuthResult().then(f_2);
+          }
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      });
   };
 
   /**
@@ -128,6 +145,7 @@ export class OAuthService {
    * @param func A callback function to call after the discovery document is loaded.
    */
   loadDiscoveryDocument = async (func?: (x: DiscoveryDocument) => void): Promise<void> => {
+    // TODO: add a cache for the discovery document
     const url = createDiscoveryUrl(this.authConfig.issuer);
     try {
       const response = await fetch(url, { method: 'GET' });
@@ -148,6 +166,25 @@ export class OAuthService {
       console.error(e);
       throw e;
     }
+  };
+
+  /**
+   * Callback function handler which gets called on redirect route after redirect is handled.
+   * */
+  invokeAfterAuthHandled = (func: () => void) => {
+    if (!location.href.startsWith(this.authConfig.redirectUri)) return;
+    const params = new URLSearchParams(document.location.search);
+    if (this.authConfig.responseType === 'code') {
+      if (!params.has('code')) {
+        func();
+      }
+    }
+  };
+
+  private evalLocalSession = (func?: (x: boolean) => void) => {
+    const isAuthed = this.hasValidIdToken();
+    this.isAuthenticated = isAuthed;
+    if (func) func(isAuthed);
   };
 
   private removeLocalSession = () => {
@@ -184,6 +221,7 @@ export class OAuthService {
       const { nonce } = getAuthStorage();
       validateIdToken(id_token, this.authConfig, nonce);
       setAuthStorage('authResult', data);
+      this.isAuthenticated = true;
 
       return data;
     } catch (err) {
@@ -223,7 +261,7 @@ export class OAuthService {
     if (!this.authConfig.authorizeEndpoint)
       throw new Error('Authorization endpoint is required, if not using discovery!');
     if (!this.authConfig.tokenEndpoint) throw new Error('Token endpoint is required, if not using discovery!');
-    if (!this.authConfig.jwks) throw new Error('Jwsk is required!');
+    if (!this.authConfig.jwks) throw new Error('Jwks is required!');
   };
 
   private validateDiscoveryDocument(discoveryDocument: DiscoveryDocument) {

@@ -13,11 +13,6 @@ export class LoginComponent implements OnInit {
   private router = inject(Router);
 
   ngOnInit(): void {
-    this.route.queryParams.subscribe(params => {
-      const code = params['code'];
-      if (!code) {
-        this.router.navigate(['/']);
-      }
-    });
+    this.auth.invokeAfterAuthHandled(() => this.router.navigate(['/']));
   }
 }
