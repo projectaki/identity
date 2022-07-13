@@ -1,6 +1,18 @@
 import { inject, Injectable } from '@angular/core';
 import { AuthConfig, AuthResult } from '@identity-auth/models';
-import { BehaviorSubject, catchError, filter, from, Observable, of, Subject, tap, throwError } from 'rxjs';
+import {
+  BehaviorSubject,
+  catchError,
+  filter,
+  from,
+  Observable,
+  of,
+  ReplaySubject,
+  Subject,
+  take,
+  tap,
+  throwError,
+} from 'rxjs';
 import { AUTH_CONFIG } from './injection-tokens';
 import { OAuthService } from './oauth-service';
 
@@ -8,11 +20,20 @@ import { OAuthService } from './oauth-service';
 export class AuthService {
   auth = new OAuthService();
 
-  private authComplete = new BehaviorSubject<boolean>(false);
-  public authComplete$ = this.authComplete.asObservable().pipe(filter(x => x));
+  private authResult = new BehaviorSubject<AuthResult | undefined>(undefined);
+  public authResult$ = this.authResult.asObservable().pipe(
+    filter(x => !!x),
+    take(1)
+  );
 
-  private isAuthenticated = new BehaviorSubject<boolean>(false);
+  private isAuthenticated = new ReplaySubject<boolean>(1);
   public isAuthenticated$ = this.isAuthenticated.asObservable();
+
+  private redirectPageProcessedAndLoaded = new BehaviorSubject<boolean>(false);
+  public redirectPageProcessedAndLoaded$ = this.redirectPageProcessedAndLoaded.asObservable().pipe(
+    filter(x => x),
+    take(1)
+  );
 
   private config = inject(AUTH_CONFIG);
 
@@ -31,14 +52,17 @@ export class AuthService {
   };
 
   initAuth = () => {
-    const cb_1 = (x: boolean) => this.isAuthenticated.next(x);
+    const cb_1 = (x: boolean) => this.isAuthenticated.next(!!x);
     const cb_2 = (x: AuthResult | void) => {
       if (x) {
-        this.authComplete.next(true);
-        this.authComplete.complete();
+        this.authResult.next(x);
+      } else {
+        this.redirectPageProcessedAndLoaded.next(true);
       }
+
       return x;
     };
+
     return this.auth.initAuth(this.config, cb_1, cb_2);
   };
 
@@ -48,7 +72,7 @@ export class AuthService {
 
   getIdToken = () => {
     const cb = (x: string) => {
-      console.log('id token', x);
+      //console.log('id token', x);
     };
     return of(this.auth.getIdToken(cb)).pipe(
       catchError(() => {

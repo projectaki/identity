@@ -11,6 +11,7 @@ import {
 } from '@identity-auth/core';
 import { AuthConfig, AuthResult, DiscoveryDocument } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
+import { getCurrentUrl } from './url-helper';
 
 export class OAuthService {
   public isAuthenticated: boolean = false;
@@ -27,8 +28,6 @@ export class OAuthService {
    * @throws Error if the discovery document was not loaded on bootstrap AND required endpoints are not set explicitly.
    */
   login = async (func?: () => void) => {
-    this.ensureAllConfigIsLoaded();
-
     const state = createNonce(32);
     const nonce = createNonce(32);
     const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
@@ -103,7 +102,6 @@ export class OAuthService {
    * @returns Promise<boolean>
    */
   handleAuthResult = async (): Promise<AuthResult | void> => {
-    this.ensureAllConfigIsLoaded();
     const params = new URLSearchParams(document.location.search);
     this.checkState(params);
     try {
@@ -119,7 +117,11 @@ export class OAuthService {
     }
   };
 
-  initAuth = (authConfig: AuthConfig, f_1?: (x: boolean) => void, f_2?: (x: AuthResult | void) => void) => {
+  initAuth = (
+    authConfig: AuthConfig,
+    authStateCb?: (x: boolean) => void,
+    authResultCb?: (x: AuthResult | void) => void
+  ) => {
     return () =>
       new Promise<void>(async (resolve, reject) => {
         this.setAuthConfig(authConfig);
@@ -127,11 +129,16 @@ export class OAuthService {
           if (authConfig.discovery == null || authConfig.discovery) {
             await this.loadDiscoveryDocument();
           }
-          this.evalLocalSession(f_1);
-          const url = location.href;
+          this.ensureAllConfigIsLoaded();
+
+          const url = getCurrentUrl();
           if (url.startsWith(authConfig.redirectUri)) {
-            this.handleAuthResult().then(f_2);
+            await this.handleAuthResult().then(authResultCb);
           }
+
+          const isAuthed = this.evaluateAuthState();
+          if (authStateCb) authStateCb(isAuthed);
+
           resolve();
         } catch (e) {
           reject(e);
@@ -181,10 +188,11 @@ export class OAuthService {
     }
   };
 
-  private evalLocalSession = (func?: (x: boolean) => void) => {
+  private evaluateAuthState = () => {
     const isAuthed = this.hasValidIdToken();
     this.isAuthenticated = isAuthed;
-    if (func) func(isAuthed);
+
+    return isAuthed;
   };
 
   private removeLocalSession = () => {
