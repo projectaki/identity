@@ -1,18 +1,8 @@
-import { Component, inject, OnInit } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { AuthService } from 'projects/auth/src/public-api';
+import { Component } from '@angular/core';
 
 @Component({
   selector: 'app-login',
-  template: ` Login page `,
+  template: ``,
   standalone: true,
 })
-export class LoginComponent implements OnInit {
-  protected auth = inject(AuthService);
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
-
-  ngOnInit(): void {
-    this.auth.invokeAfterAuthHandled(() => this.router.navigate(['/']));
-  }
-}
+export class LoginComponent {}
