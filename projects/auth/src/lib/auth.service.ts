@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { AuthConfig, AuthResult } from '@identity-auth/models';
+import { AuthConfig, AuthResult, QueryParams } from '@identity-auth/models';
 import {
   BehaviorSubject,
   catchError,
@@ -14,11 +14,11 @@ import {
   throwError,
 } from 'rxjs';
 import { AUTH_CONFIG } from './injection-tokens';
-import { OAuthService } from './oauth-service';
+import { OIDCService } from './oidc-service';
 
 @Injectable()
 export class AuthService {
-  auth = new OAuthService();
+  auth = new OIDCService();
 
   private authResult = new BehaviorSubject<AuthResult | undefined>(undefined);
   public authResult$ = this.authResult.asObservable().pipe(
@@ -41,9 +41,9 @@ export class AuthService {
     this.auth.login();
   };
 
-  logout = () => {
+  logout = (queryParams?: QueryParams) => {
     const cb = () => this.isAuthenticated.next(false);
-    this.auth.logout(cb);
+    this.auth.logout(queryParams, cb);
   };
 
   localLogout = () => {

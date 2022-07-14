@@ -9,11 +9,11 @@ import {
   trimIssuerOfTrailingSlash,
   validateIdToken,
 } from '@identity-auth/core';
-import { AuthConfig, AuthResult, DiscoveryDocument } from '@identity-auth/models';
+import { AuthConfig, AuthResult, DiscoveryDocument, QueryParams } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
-import { getCurrentUrl } from './url-helper';
+import { getCurrentUrl, redirectTo } from './url-helper';
 
-export class OAuthService {
+export class OIDCService {
   public isAuthenticated: boolean = false;
   private authConfig!: AuthConfig;
   private discoveryDocument!: DiscoveryDocument;
@@ -35,26 +35,23 @@ export class OAuthService {
     setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
     const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
-    location.href = authUrl;
-    if (func) func();
+    redirectTo(authUrl);
+    typeof func === 'function' && func();
   };
 
   localLogout = (func?: () => void) => {
     this.removeLocalSession();
-    location.href = this.authConfig.postLogoutRedirectUri;
-    if (func) func();
+    redirectTo(this.authConfig.postLogoutRedirectUri);
+    typeof func === 'function' && func();
   };
 
-  logout = (func?: () => void) => {
+  logout = (queryParams?: QueryParams, func?: () => void) => {
     if (!this.authConfig.endsessionEndpoint) throw new Error('Endsession endpoint is not set!');
 
     this.removeLocalSession();
-    const logoutUrl = createLogoutUrl(this.authConfig.endsessionEndpoint, {
-      returnTo: this.authConfig.postLogoutRedirectUri,
-      client_id: this.authConfig.clientId,
-    });
-    location.href = logoutUrl;
-    if (func) func();
+    const logoutUrl = createLogoutUrl(this.authConfig.endsessionEndpoint, queryParams);
+    redirectTo(logoutUrl);
+    typeof func === 'function' && func();
   };
 
   /**
@@ -65,24 +62,27 @@ export class OAuthService {
     this.authConfig = authConfig;
   };
 
-  getAccessToken = (func?: (x: any) => void): string | null => {
+  getAccessToken = (func?: (x: string) => void): string | null => {
     const token: string = getAuthStorage().authResult?.access_token;
     if (token) {
       return token;
     }
-    if (func) func(token);
+    typeof func === 'function' && func(token);
+
     return null;
   };
 
   getIdToken = (func?: (x: string) => void): string | null => {
     const token: string = getAuthStorage().authResult?.id_token;
     if (!token) {
-      if (func) func(token);
+      typeof func === 'function' && func(token);
+
       return null;
     }
     const isValid = this.hasValidIdToken(token);
     if (isValid) {
-      if (func) func(token);
+      typeof func === 'function' && func(token);
+
       return token;
     }
     throw new Error('No valid id token found!');
@@ -137,7 +137,7 @@ export class OAuthService {
           }
 
           const isAuthed = this.evaluateAuthState();
-          if (authStateCb) authStateCb(isAuthed);
+          typeof authStateCb === 'function' && authStateCb(isAuthed);
 
           resolve();
         } catch (e) {
@@ -151,7 +151,10 @@ export class OAuthService {
    * Load the discovery document using the issuer provided in the authConfig.
    * @param func A callback function to call after the discovery document is loaded.
    */
-  loadDiscoveryDocument = async (func?: (x: DiscoveryDocument) => void): Promise<void> => {
+  loadDiscoveryDocument = async (
+    discoveryLoadedCb?: (x: DiscoveryDocument) => void,
+    jwksLoadedCb?: (x: any) => void
+  ): Promise<void> => {
     // TODO: add a cache for the discovery document
     const url = createDiscoveryUrl(this.authConfig.issuer);
     try {
@@ -160,15 +163,14 @@ export class OAuthService {
       if (this.authConfig.validateDiscovery == null || !!this.authConfig.validateDiscovery)
         this.validateDiscoveryDocument(discoveryDocument);
       this.discoveryDocument = discoveryDocument;
+      typeof discoveryLoadedCb === 'function' && discoveryLoadedCb(discoveryDocument);
+
       this.authConfig.authorizeEndpoint = this.discoveryDocument.authorization_endpoint;
       this.authConfig.tokenEndpoint = this.discoveryDocument.token_endpoint;
 
       const jwks = await this.loadJwks();
       this.authConfig.jwks = jwks;
-      console.log(jwks);
-
-      if (func) func(discoveryDocument);
-      console.log(discoveryDocument);
+      typeof jwksLoadedCb === 'function' && jwksLoadedCb(discoveryDocument);
     } catch (e) {
       console.error(e);
       throw e;
