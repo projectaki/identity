@@ -19,6 +19,10 @@ import { OIDCService } from './oidc-service';
 @Injectable()
 export class AuthService {
   auth = new OIDCService();
+  private authStateChangeCb: (authState: boolean) => void = x => {
+    console.log('authStateChangeCb', x);
+    this.isAuthenticated.next(x);
+  };
 
   private authResult = new BehaviorSubject<AuthResult | undefined>(undefined);
   public authResult$ = this.authResult.asObservable().pipe(
@@ -37,22 +41,23 @@ export class AuthService {
 
   private config = inject(AUTH_CONFIG);
 
+  constructor() {
+    this.auth.setAuthStateChangeCb(this.authStateChangeCb);
+  }
+
   login = () => {
     this.auth.login();
   };
 
   logout = (queryParams?: QueryParams) => {
-    const cb = () => this.isAuthenticated.next(false);
-    this.auth.logout(queryParams, cb);
+    this.auth.logout(queryParams);
   };
 
   localLogout = () => {
-    const cb = () => this.isAuthenticated.next(false);
-    this.auth.localLogout(cb);
+    this.auth.localLogout();
   };
 
   initAuth = () => {
-    const cb_1 = (x: boolean) => this.isAuthenticated.next(!!x);
     const cb_2 = (x: AuthResult | void) => {
       if (x) {
         this.authResult.next(x);
@@ -63,7 +68,7 @@ export class AuthService {
       return x;
     };
 
-    return this.auth.initAuth(this.config, cb_1, cb_2);
+    return this.auth.initAuth(this.config, cb_2);
   };
 
   getAccessToken = () => {
@@ -78,9 +83,5 @@ export class AuthService {
         return throwError(() => 'No id token found');
       })
     );
-  };
-
-  invokeAfterAuthHandled = (action: () => void) => {
-    this.auth.invokeAfterAuthHandled(action);
   };
 }

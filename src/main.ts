@@ -25,7 +25,7 @@ bootstrapApplication(AppComponent, {
     },
     {
       provide: APP_INITIALIZER,
-      useFactory: (auth: AuthService) => auth.initAuth(),
+      useFactory: (auth: AuthService) => () => auth.initAuth(),
       deps: [AuthService],
       multi: true,
     },

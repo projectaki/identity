@@ -67,6 +67,8 @@ export class HomeComponent implements OnInit {
   }
 
   logout() {
+    this.auth.localLogout();
+    return;
     this.auth.logout({
       returnTo: this.authConfig.postLogoutRedirectUri,
       client_id: this.authConfig.clientId,

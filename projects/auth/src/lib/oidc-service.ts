@@ -14,19 +14,19 @@ import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity
 import { getCurrentUrl, getQueryParams, redirectTo } from './url-helper';
 
 export class OIDCService {
-  public isAuthenticated: boolean = false;
+  private authStateChangeCb: (authState: boolean) => void = () => false;
+  private isAuthenticated: boolean = false;
   private authConfig!: AuthConfig;
   private discoveryDocument!: DiscoveryDocument;
 
   /**
-   * Creates the auth URL and redirects to it.
    *
-   * Description:
-   * Creates a nonce for the "state" param and generates a code verifier and code challenge.
-   * The state and code verifier gets saved in the session storage, as it is needed after the redirect. (cannot be kept in memory)
-   * If the discovery document was not loaded on bootstrap, will load it first.
-   * @throws Error if the discovery document was not loaded on bootstrap AND required endpoints are not set explicitly.
+   * @param cb callback function to be called when auth state changes
    */
+  setAuthStateChangeCb(cb: (authResult: boolean) => void) {
+    this.authStateChangeCb = cb;
+  }
+
   login = async () => {
     const state = createNonce(32);
     const nonce = createNonce(32);
@@ -38,27 +38,21 @@ export class OIDCService {
     redirectTo(authUrl);
   };
 
-  localLogout = (logoutCb?: () => void) => {
+  /**
+   *
+   * @param logoutCb Callback to be called when logout is complete.
+   */
+  localLogout = () => {
     this.removeLocalSession();
     redirectTo(this.authConfig.postLogoutRedirectUri);
-    typeof logoutCb === 'function' && logoutCb();
   };
 
-  logout = (queryParams?: QueryParams, logoutCb?: () => void) => {
+  logout = (queryParams?: QueryParams) => {
     if (!this.authConfig.endsessionEndpoint) throw new Error('Endsession endpoint is not set!');
 
     this.removeLocalSession();
     const logoutUrl = createLogoutUrl(this.authConfig.endsessionEndpoint, queryParams);
     redirectTo(logoutUrl);
-    typeof logoutCb === 'function' && logoutCb();
-  };
-
-  /**
-   * Called once when bootstrapping the app to configure the auth service.
-   * @param authConfig
-   */
-  setAuthConfig = (authConfig: AuthConfig) => {
-    this.authConfig = authConfig;
   };
 
   getAccessToken = (): string | null => {
@@ -81,69 +75,65 @@ export class OIDCService {
   };
 
   hasValidIdToken = (inputToken?: string): boolean => {
-    const token = inputToken ?? getAuthStorage().authResult?.id_token;
-    const isValid = token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
+    const token: string | undefined = inputToken ?? getAuthStorage().authResult?.id_token;
+    const isValid: boolean = !!token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
 
     return isValid;
   };
 
   /**
-   * Handler for the authentication redirect. Needs to be called in the redirect route.
-   * Will vallidate the "state" param, and handle the flow based on the grant type.
-   * @param func A callback function to call after the auth flow is completed.
-   * @returns Promise<boolean>
+   * Initialize the authentication flow. Loads the discovery document (optionally from config) and stores it in the service. Checks
+   * if all of the configs are proprely set.
+   * @param authConfig AuthConfig
+   * @param authResultCb Callback to be called when auth redirect has been processed and validated. Returns the auth result,
+   * if the id token was valid, and returns void if the redirect uri route was loaded without query params.
    */
-  handleAuthResult = async (): Promise<AuthResult | void> => {
-    const params = getQueryParams();
-    this.checkState(params);
+  initAuth = async (authConfig: AuthConfig, authResultCb?: (x: AuthResult | void) => void): Promise<void> => {
+    this.setAuthConfig(authConfig);
     try {
-      if (this.authConfig.responseType === 'code') {
-        const x_1 = await this.handleCodeFlowRedirect(params);
-        if (x_1) location.href = this.authConfig.redirectUri;
-
-        return x_1;
+      if (authConfig.discovery == null || authConfig.discovery) {
+        await this.loadDiscoveryDocument();
       }
+      this.ensureAllConfigIsLoaded();
+      await this.runAuthFlow(authResultCb);
     } catch (e) {
-      console.error(e);
+      console.log(e);
       throw e;
     }
   };
 
-  initAuth = (
-    authConfig: AuthConfig,
-    authStateCb?: (x: boolean) => void,
-    authResultCb?: (x: AuthResult | void) => void
-  ) => {
-    return () =>
-      new Promise<void>(async (resolve, reject) => {
-        this.setAuthConfig(authConfig);
-        try {
-          if (authConfig.discovery == null || authConfig.discovery) {
-            await this.loadDiscoveryDocument();
-          }
-          this.ensureAllConfigIsLoaded();
+  private runAuthFlow = async (authResultCb?: (x: AuthResult | void) => void) => {
+    const url = getCurrentUrl();
+    const queryParams = getQueryParams();
 
-          const url = getCurrentUrl();
-          if (url.startsWith(authConfig.redirectUri)) {
-            await this.handleAuthResult().then(authResultCb);
-          }
+    if (url.startsWith(this.authConfig.redirectUri) && queryParams.toString()) {
+      await handleRedirectRouteWithQueryParams.call(this);
+    } else if (url.startsWith(this.authConfig.redirectUri) && !queryParams.toString()) {
+      handleRedirectRouteWithoutQueryParams.call(this);
+    } else {
+      handleAllRoutesNotRedirectUri.call(this);
+    }
 
-          const isAuthed = this.evaluateAuthState();
-          typeof authStateCb === 'function' && authStateCb(isAuthed);
+    async function handleRedirectRouteWithQueryParams(this: OIDCService) {
+      const res = await this.getAuthResult(queryParams);
+      this.evaluateAuthState(res.id_token);
+      typeof authResultCb === 'function' && authResultCb(res);
 
-          resolve();
-        } catch (e) {
-          reject(e);
-        }
-      });
+      setAuthStorage('authResult', res);
+      redirectTo(this.authConfig.redirectUri);
+    }
+
+    function handleRedirectRouteWithoutQueryParams(this: OIDCService) {
+      typeof authResultCb === 'function' && authResultCb();
+      this.evaluateAuthState();
+    }
+
+    function handleAllRoutesNotRedirectUri(this: OIDCService) {
+      this.evaluateAuthState();
+    }
   };
 
-  /**
-   * Should be called on application bootstrap, to get the discovery document.
-   * Load the discovery document using the issuer provided in the authConfig.
-   * @param func A callback function to call after the discovery document is loaded.
-   */
-  loadDiscoveryDocument = async (
+  private loadDiscoveryDocument = async (
     discoveryLoadedCb?: (x: DiscoveryDocument) => void,
     jwksLoadedCb?: (x: any) => void
   ): Promise<void> => {
@@ -169,22 +159,49 @@ export class OIDCService {
     }
   };
 
-  /**
-   * Callback function handler which gets called on redirect route after redirect is handled.
-   * */
-  invokeAfterAuthHandled = (func: () => void) => {
-    if (!location.href.startsWith(this.authConfig.redirectUri)) return;
-    const params = new URLSearchParams(document.location.search);
-    if (this.authConfig.responseType === 'code') {
-      if (!params.has('code')) {
-        func();
-      }
+  private getAuthResult = async (queryParams: URLSearchParams): Promise<AuthResult> => {
+    const params = queryParams ?? getQueryParams();
+    this.checkState(params);
+    if (params.has('error')) throw new Error(params.get('error')!);
+
+    try {
+      if (this.authConfig.responseType === 'code') {
+        const authResult = await this.handleCodeFlowRedirect(params);
+
+        return authResult;
+      } else return {} as AuthResult; // until other cases implemented
+    } catch (e) {
+      console.error(e);
+      throw e;
     }
   };
 
-  private evaluateAuthState = () => {
-    const isAuthed = this.hasValidIdToken();
-    this.isAuthenticated = isAuthed;
+  private handleCodeFlowRedirect = async (params: URLSearchParams): Promise<AuthResult> => {
+    if (!params.has('code')) throw new Error('No code found in query params!');
+
+    const code = params.get('code')!;
+
+    try {
+      const data = await this.fetchTokensWithCode(code);
+
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  private setAuthConfig = (authConfig: AuthConfig) => {
+    this.authConfig = authConfig;
+  };
+
+  private setAuthState = (authState: boolean) => {
+    this.isAuthenticated = authState;
+    this.authStateChangeCb(authState);
+  };
+
+  private evaluateAuthState = (token?: string) => {
+    const isAuthed = this.hasValidIdToken(token);
+    this.setAuthState(isAuthed);
 
     return isAuthed;
   };
@@ -193,7 +210,7 @@ export class OIDCService {
     removeFromAuthStorage('authResult');
     removeFromAuthStorage('nonce');
     removeFromAuthStorage('codeVerifier');
-    this.isAuthenticated = false;
+    this.setAuthState(false);
   };
 
   private loadJwks = async () => {
@@ -208,30 +225,7 @@ export class OIDCService {
     }
   };
 
-  private handleCodeFlowRedirect = async (params: URLSearchParams): Promise<AuthResult | void> => {
-    if (params.has('error')) {
-      throw new Error(params.get('error')!);
-    }
-    if (!params.has('code')) {
-      return;
-    }
-    const code = params.get('code')!;
-
-    try {
-      const data = await this.fetchTokens(code);
-      const { id_token } = data;
-      const { nonce } = getAuthStorage();
-      validateIdToken(id_token, this.authConfig, nonce);
-      setAuthStorage('authResult', data);
-      this.isAuthenticated = true;
-
-      return data;
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  private fetchTokens = async (code: string): Promise<AuthResult> => {
+  private fetchTokensWithCode = async (code: string): Promise<AuthResult> => {
     const { codeVerifier } = getAuthStorage();
     const body = createTokenRequestBody(this.authConfig, code, codeVerifier);
     try {
