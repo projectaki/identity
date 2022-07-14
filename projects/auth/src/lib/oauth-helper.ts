@@ -1,4 +1,4 @@
-import { AuthConfig, AuthorizeUrlParams } from './models';
+import { AuthConfig, AuthorizeUrlParams, QueryParams } from './models';
 import { base64Decode, base64UrlDecode, base64UrlEncode } from '@identity-auth/encoding';
 import { sha256 } from '@identity-auth/hashing';
 import { KEYUTIL, KJUR } from 'jsrsasign';
@@ -236,7 +236,7 @@ or if it contains additional audiences not trusted by the Client.
   */
   function validateIatClaim() {
     const { iat } = payload;
-    if (iat > Date.now() / 1000) {
+    if (iat > Date.now() / 1000 + 60) {
       throw new Error('Token is not yet valid');
     }
   }
@@ -286,7 +286,7 @@ or if it contains additional audiences not trusted by the Client.
   }
 };
 
-export const createLogoutUrl = (endsessionEndpoint: string, queryParams?: { [key: string]: string }) => {
+export const createLogoutUrl = (endsessionEndpoint: string, queryParams?: QueryParams) => {
   if (!queryParams) return endsessionEndpoint;
 
   const searchParams = new URLSearchParams();

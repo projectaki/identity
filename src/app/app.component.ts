@@ -13,8 +13,6 @@ export class AppComponent {
   private router = inject(Router);
 
   ngOnInit(): void {
-    console.log('AppComponent.ngOnInit');
-
     this.auth.authResult$.subscribe(x => {
       console.log('auth complete', x);
     });

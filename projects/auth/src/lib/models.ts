@@ -9,7 +9,7 @@ export interface AuthConfig {
   tokenEndpoint?: string;
   endsessionEndpoint?: string;
   jwks?: any;
-  queryParams?: { [key: string]: string };
+  queryParams?: QueryParams;
   validateDiscovery?: boolean;
   discovery?: boolean;
 }
@@ -86,4 +86,8 @@ export interface AuthResult {
   expires_in: number;
   scope: string;
   token_type: string;
+}
+
+export interface QueryParams {
+  [key: string]: string;
 }
