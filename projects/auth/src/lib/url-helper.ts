@@ -5,3 +5,7 @@ export const redirectTo = (url: string) => {
 export const getCurrentUrl = () => {
   return location.href;
 };
+
+export const getQueryParams = () => {
+  return new URLSearchParams(location.search);
+};

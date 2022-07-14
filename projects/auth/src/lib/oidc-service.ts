@@ -11,7 +11,7 @@ import {
 } from '@identity-auth/core';
 import { AuthConfig, AuthResult, DiscoveryDocument, QueryParams } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
-import { getCurrentUrl, redirectTo } from './url-helper';
+import { getCurrentUrl, getQueryParams, redirectTo } from './url-helper';
 
 export class OIDCService {
   public isAuthenticated: boolean = false;
@@ -27,7 +27,7 @@ export class OIDCService {
    * If the discovery document was not loaded on bootstrap, will load it first.
    * @throws Error if the discovery document was not loaded on bootstrap AND required endpoints are not set explicitly.
    */
-  login = async (func?: () => void) => {
+  login = async () => {
     const state = createNonce(32);
     const nonce = createNonce(32);
     const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
@@ -36,22 +36,21 @@ export class OIDCService {
     setAuthStorage('codeVerifier', codeVerifier);
     const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
     redirectTo(authUrl);
-    typeof func === 'function' && func();
   };
 
-  localLogout = (func?: () => void) => {
+  localLogout = (logoutCb?: () => void) => {
     this.removeLocalSession();
     redirectTo(this.authConfig.postLogoutRedirectUri);
-    typeof func === 'function' && func();
+    typeof logoutCb === 'function' && logoutCb();
   };
 
-  logout = (queryParams?: QueryParams, func?: () => void) => {
+  logout = (queryParams?: QueryParams, logoutCb?: () => void) => {
     if (!this.authConfig.endsessionEndpoint) throw new Error('Endsession endpoint is not set!');
 
     this.removeLocalSession();
     const logoutUrl = createLogoutUrl(this.authConfig.endsessionEndpoint, queryParams);
     redirectTo(logoutUrl);
-    typeof func === 'function' && func();
+    typeof logoutCb === 'function' && logoutCb();
   };
 
   /**
@@ -62,29 +61,22 @@ export class OIDCService {
     this.authConfig = authConfig;
   };
 
-  getAccessToken = (func?: (x: string) => void): string | null => {
+  getAccessToken = (): string | null => {
     const token: string = getAuthStorage().authResult?.access_token;
     if (token) {
       return token;
     }
-    typeof func === 'function' && func(token);
 
     return null;
   };
 
-  getIdToken = (func?: (x: string) => void): string | null => {
+  getIdToken = (): string | null => {
     const token: string = getAuthStorage().authResult?.id_token;
-    if (!token) {
-      typeof func === 'function' && func(token);
+    if (!token) return null;
 
-      return null;
-    }
     const isValid = this.hasValidIdToken(token);
-    if (isValid) {
-      typeof func === 'function' && func(token);
+    if (isValid) return token;
 
-      return token;
-    }
     throw new Error('No valid id token found!');
   };
 
@@ -102,7 +94,7 @@ export class OIDCService {
    * @returns Promise<boolean>
    */
   handleAuthResult = async (): Promise<AuthResult | void> => {
-    const params = new URLSearchParams(document.location.search);
+    const params = getQueryParams();
     this.checkState(params);
     try {
       if (this.authConfig.responseType === 'code') {

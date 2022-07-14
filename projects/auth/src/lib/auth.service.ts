@@ -71,10 +71,7 @@ export class AuthService {
   };
 
   getIdToken = () => {
-    const cb = (x: string) => {
-      //console.log('id token', x);
-    };
-    return of(this.auth.getIdToken(cb)).pipe(
+    return of(this.auth.getIdToken()).pipe(
       catchError(() => {
         this.isAuthenticated.next(false);
 
