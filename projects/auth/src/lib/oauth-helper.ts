@@ -236,7 +236,7 @@ or if it contains additional audiences not trusted by the Client.
   */
   function validateIatClaim() {
     const { iat } = payload;
-    if (iat > Date.now() / 1000) {
+    if (iat > Date.now() / 1000 + 60) {
       throw new Error('Token is not yet valid');
     }
   }
