@@ -1,10 +1,10 @@
 import {
   createAuthUrl,
-  createAuthUrlFromConfig,
   createCodeVerifierCodeChallengePair,
   createDiscoveryUrl,
   createLogoutUrl,
   createNonce,
+  createParamsFromConfig,
   createTokenRequestBody,
   trimIssuerOfTrailingSlash,
   validateIdToken,
@@ -34,7 +34,11 @@ export class OIDCService {
     setAuthStorage('state', state);
     setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
-    const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
+    const params = createParamsFromConfig(this.authConfig, {}, state, nonce);
+    Object.keys(params).forEach(key => {
+      setAuthStorage(key, params[key]);
+    });
+    const authUrl = createAuthUrl(this.authConfig.authorizeEndpoint!, params, codeChallenge);
     redirectTo(authUrl);
   };
 

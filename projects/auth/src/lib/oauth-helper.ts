@@ -3,12 +3,15 @@ import { base64Decode, base64UrlDecode, base64UrlEncode } from '@identity-auth/e
 import { sha256 } from '@identity-auth/hashing';
 import { KEYUTIL, KJUR } from 'jsrsasign';
 import { decodeJWt } from '@identity-auth/jwt';
+import { dateNowMsSinceEpoch } from './datetime-helper';
 
-export const createAuthUrlFromConfig = (
+const SKEW_DEFAULT = 0;
+
+export const createParamsFromConfig = (
   authConfig: AuthConfig,
+  extraParams?: QueryParams,
   state?: string,
-  nonce?: string,
-  codeChallenge?: string
+  nonce?: string
 ) => {
   const authUrlParams: AuthorizeUrlParams = {
     client_id: authConfig.clientId,
@@ -25,7 +28,13 @@ export const createAuthUrlFromConfig = (
     });
   }
 
-  return createAuthUrl(authConfig.authorizeEndpoint!, authUrlParams, codeChallenge);
+  if (extraParams) {
+    Object.keys(extraParams).forEach(key => {
+      authUrlParams[key] = extraParams[key];
+    });
+  }
+
+  return authUrlParams;
 };
 
 export const createAuthUrl = (url: string, authUrlParams: AuthorizeUrlParams, codeChallenge?: string) => {
@@ -42,12 +51,12 @@ export const createAuthUrl = (url: string, authUrlParams: AuthorizeUrlParams, co
   return res;
 };
 
-export const createTokenRequestBody = (authConfig: AuthConfig, code: string, codeVerifier?: string) => {
+export const createTokenRequestBody = (authConfig: AuthConfig, code: string, codeVerifier: string) => {
   const grantType = getGrantType(authConfig);
   const urlSearchParam = new URLSearchParams();
   urlSearchParam.append('grant_type', grantType);
   urlSearchParam.append('code', code);
-  if (codeVerifier) urlSearchParam.append('code_verifier', codeVerifier);
+  urlSearchParam.append('code_verifier', codeVerifier);
   urlSearchParam.append('redirect_uri', authConfig.redirectUri);
   urlSearchParam.append('client_id', authConfig.clientId);
   const body = urlSearchParam.toString();
@@ -101,8 +110,8 @@ export const trimIssuerOfTrailingSlash = (issuer: string) => {
   return issuer.endsWith('/') ? issuer.slice(0, -1) : issuer;
 };
 
-export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?: string): boolean => {
-  const { header, payload, signature } = decodeJWt(idToken);
+export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?: string, max_age?: number): boolean => {
+  const { header, payload } = decodeJWt(idToken);
 
   checkEncryption();
   validateIssuer();
@@ -119,6 +128,7 @@ export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?:
   return true;
 
   /*
+  EMPTY FUNCTION, AS WE CANNOT SECRETLY STORE KEYS FOR DECRYPTION ON PUBLIC CLIENTS
   1. If the ID Token is encrypted, decrypt it using the keys and algorithms that the Client specified during Registration 
   that the OP was to use to encrypt the ID Token. If encryption was negotiated with the OP at Registration time and 
   the ID Token is not encrypted, the RP `**SHOULD**` reject it.
@@ -201,11 +211,12 @@ or if it contains additional audiences not trusted by the Client.
   function validateAlg() {
     const { alg } = header;
     if (alg !== 'RS256') {
-      throw new Error('Invalid algorithm');
+      throw new Error('Invalid algorithm, only RS256 is supported');
     }
   }
 
   /*
+  ONLY NEED THIS CHECK IF IN FUTURE OTHER ALGORITHMS ARE SUPPORTED (other than RS256)
   8. If the JWT `alg` Header Parameter uses a MAC based algorithm such as HS256, HS384, or HS512, 
   the octets of the UTF-8 representation of the `client_secret` 
   corresponding to the `client_id` contained in the `aud` (audience) Claim are used as the key to validate the signature. 
@@ -223,8 +234,9 @@ or if it contains additional audiences not trusted by the Client.
   9. The current time `**MUST**` be before the time represented by the `exp` Claim.
   */
   function validateExpClaim() {
+    const skew = authConfig.clockSkewSeconds ?? SKEW_DEFAULT;
     const { exp } = payload;
-    if (exp < Date.now() / 1000) {
+    if (exp < dateNowMsSinceEpoch() + skew) {
       throw new Error('Token has expired');
     }
   }
@@ -235,8 +247,9 @@ or if it contains additional audiences not trusted by the Client.
   The acceptable range is Client specific.
   */
   function validateIatClaim() {
+    const skew = authConfig.clockSkewSeconds ?? SKEW_DEFAULT;
     const { iat } = payload;
-    if (iat > Date.now() / 1000 + 60) {
+    if (iat > dateNowMsSinceEpoch() + skew) {
       throw new Error('Token is not yet valid');
     }
   }
@@ -273,15 +286,20 @@ or if it contains additional audiences not trusted by the Client.
   }
 
   /*
+  THIS FUNCTIONALITY IS NOT SUPPORTED
   13. If the `auth_time` Claim was requested, either through a specific request for this Claim
   or by using the `max_age` parameter, the Client `**SHOULD**` check the `auth_time` Claim value
   and request re-authentication if it determines too much time has elapsed since the last End-User authentication.
   */
   function validateAuthTimeClaim() {
     const { auth_time } = payload;
-    if (!auth_time) return;
-    if (auth_time > Date.now() / 1000) {
-      throw new Error('Token is not yet valid');
+    if (!max_age && !auth_time) return;
+    if (max_age && !auth_time) throw new Error('auth_time required when max age was requested');
+    if (!max_age && auth_time) throw new Error('max_age required when auth_time was returned');
+
+    const timeToExpire = auth_time + max_age;
+    if (timeToExpire < dateNowMsSinceEpoch()) {
+      throw new Error('Max age was reached');
     }
   }
 };
