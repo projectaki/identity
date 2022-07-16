@@ -1,11 +1,12 @@
 import {
+  checkState,
   createAuthUrl,
-  createAuthUrlFromConfig,
-  createCodeVerifierCodeChallengePair,
   createDiscoveryUrl,
   createLogoutUrl,
   createNonce,
+  createParamsFromConfig,
   createTokenRequestBody,
+  createVerifierAndChallengePair,
   trimIssuerOfTrailingSlash,
   validateIdToken,
 } from '@identity-auth/core';
@@ -27,14 +28,21 @@ export class OIDCService {
     this.authStateChangeCb = cb;
   }
 
-  login = async () => {
-    const state = createNonce(32);
-    const nonce = createNonce(32);
-    const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
+  login = async (extraParams?: QueryParams) => {
+    removeFromAuthStorage('max_age'); //remove everything from storage
+    const [state, hashedState] = createVerifierAndChallengePair(42);
+    const [nonce, hashedNonce] = createVerifierAndChallengePair(42);
+    const [codeVerifier, codeChallenge] = createVerifierAndChallengePair();
     setAuthStorage('state', state);
     setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
-    const authUrl = createAuthUrlFromConfig(this.authConfig, state, nonce, codeChallenge);
+    const params = createParamsFromConfig(this.authConfig, extraParams);
+    Object.keys(params).forEach(key => {
+      setAuthStorage(key, params[key]);
+    });
+    params.state = hashedState;
+    params.nonce = hashedNonce;
+    const authUrl = createAuthUrl(this.authConfig.authorizeEndpoint!, params, codeChallenge);
     redirectTo(authUrl);
   };
 
@@ -76,7 +84,8 @@ export class OIDCService {
 
   hasValidIdToken = (inputToken?: string): boolean => {
     const token: string | undefined = inputToken ?? getAuthStorage().authResult?.id_token;
-    const isValid: boolean = !!token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
+    const isValid: boolean =
+      !!token && validateIdToken(token, this.authConfig, getAuthStorage().nonce, getAuthStorage().max_age);
 
     return isValid;
   };
@@ -90,14 +99,14 @@ export class OIDCService {
    */
   initAuth = async (authConfig: AuthConfig, authResultCb?: (x: AuthResult | void) => void): Promise<void> => {
     this.setAuthConfig(authConfig);
+    if (authConfig.discovery == null || authConfig.discovery) {
+      await this.loadDiscoveryDocument();
+    }
+    this.ensureAllConfigIsLoaded();
     try {
-      if (authConfig.discovery == null || authConfig.discovery) {
-        await this.loadDiscoveryDocument();
-      }
-      this.ensureAllConfigIsLoaded();
       await this.runAuthFlow(authResultCb);
     } catch (e) {
-      console.log(e);
+      this.login({ prompt: 'login' });
       throw e;
     }
   };
@@ -161,7 +170,8 @@ export class OIDCService {
 
   private getAuthResult = async (queryParams: URLSearchParams): Promise<AuthResult> => {
     const params = queryParams ?? getQueryParams();
-    this.checkState(params);
+    checkState(getAuthStorage().state, params.get('state')!);
+
     if (params.has('error')) throw new Error(params.get('error')!);
 
     try {
@@ -243,15 +253,6 @@ export class OIDCService {
     }
   };
 
-  private checkState = (params: URLSearchParams) => {
-    const state = params.get('state');
-    const authStorage = getAuthStorage();
-    if (authStorage.state && !state) throw new Error('Missing state parameter from redirect');
-    if (!authStorage.state && state) throw new Error('Missing state in storage but expected one');
-    if (authStorage.state && authStorage.state !== state) throw new Error('Invalid state');
-    if (authStorage.state && state) removeFromAuthStorage('state');
-  };
-
   private ensureAllConfigIsLoaded = () => {
     if (!this.authConfig) throw new Error('Missing authConfig');
     if (!this.authConfig.authorizeEndpoint)
@@ -265,10 +266,5 @@ export class OIDCService {
 
     const issuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(discoveryDocument.issuer);
     if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
-  }
-
-  // Test method remove later
-  validate(idToken: string) {
-    validateIdToken(idToken, this.authConfig);
   }
 }

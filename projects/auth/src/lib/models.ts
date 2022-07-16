@@ -12,6 +12,7 @@ export interface AuthConfig {
   queryParams?: QueryParams;
   validateDiscovery?: boolean;
   discovery?: boolean;
+  clockSkewSeconds?: number;
 }
 
 export interface AuthorizeUrlParams {
@@ -89,5 +90,5 @@ export interface AuthResult {
 }
 
 export interface QueryParams {
-  [key: string]: string;
+  [key: string]: string | number | boolean;
 }
