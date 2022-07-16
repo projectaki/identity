@@ -7,20 +7,14 @@ import { dateNowMsSinceEpoch } from './datetime-helper';
 
 const SKEW_DEFAULT = 0;
 
-export const createParamsFromConfig = (
-  authConfig: AuthConfig,
-  extraParams?: QueryParams,
-  state?: string,
-  nonce?: string
-) => {
+export const createParamsFromConfig = (authConfig: AuthConfig, extraParams?: QueryParams) => {
   const authUrlParams: AuthorizeUrlParams = {
     client_id: authConfig.clientId,
     redirect_uri: authConfig.redirectUri,
     response_type: authConfig.responseType,
     scope: authConfig.scope,
   };
-  if (state) authUrlParams.state = state;
-  if (nonce) authUrlParams.nonce = nonce;
+
   const queryParams = authConfig.queryParams;
   if (queryParams) {
     Object.keys(queryParams).forEach(key => {
@@ -73,15 +67,18 @@ export const getGrantType = (authConfig: AuthConfig) => {
   return 'implicit';
 };
 
-export const createCodeVerifierCodeChallengePair = () => {
-  const codeVerifier = createNonce(32);
-  const codeChallenge = createCodeChallenge(codeVerifier);
+export const createVerifierAndChallengePair = (length?: number) => {
+  const verifier = createNonce(length ?? 32);
+  const challenge = base64UrlEncode(sha256(verifier, 'ascii'));
+  console.log('challenge', challenge, 'verifier', verifier);
+  return [verifier, challenge];
+};
 
-  function createCodeChallenge(codeVerifier: string) {
-    return base64UrlEncode(sha256(codeVerifier));
-  }
+export const verifyChallenge = (verifier: string, challenge: string) => {
+  const challengeHash = base64UrlDecode(challenge);
+  const verifierHash = sha256(verifier, 'ascii');
 
-  return { codeVerifier, codeChallenge };
+  return challengeHash === verifierHash;
 };
 
 export const createRandomString = (length: number) => {
@@ -267,8 +264,7 @@ or if it contains additional audiences not trusted by the Client.
       throw new Error('Nonce is required');
     }
 
-    // should be refactored to compare hashes not value itself
-    if (nonce !== sentNonce) {
+    if (!verifyChallenge(sentNonce, nonce)) {
       throw new Error('Invalid nonce');
     }
   }
@@ -313,4 +309,12 @@ export const createLogoutUrl = (endsessionEndpoint: string, queryParams?: QueryP
   });
 
   return `${endsessionEndpoint}?${searchParams.toString()}`;
+};
+
+export const checkState = (localState?: string, returnedState?: string) => {
+  if (!localState && !returnedState) return;
+  if (localState && !returnedState) throw new Error('Missing state parameter from redirect');
+  if (!localState && returnedState) throw new Error('Missing state in storage but expected one');
+
+  if (!verifyChallenge(localState!, returnedState!)) throw new Error('Invalid state');
 };

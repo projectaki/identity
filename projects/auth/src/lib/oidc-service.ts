@@ -1,11 +1,12 @@
 import {
+  checkState,
   createAuthUrl,
-  createCodeVerifierCodeChallengePair,
   createDiscoveryUrl,
   createLogoutUrl,
   createNonce,
   createParamsFromConfig,
   createTokenRequestBody,
+  createVerifierAndChallengePair,
   trimIssuerOfTrailingSlash,
   validateIdToken,
 } from '@identity-auth/core';
@@ -29,16 +30,18 @@ export class OIDCService {
 
   login = async (extraParams?: QueryParams) => {
     removeFromAuthStorage('max_age'); //remove everything from storage
-    const state = createNonce(32);
-    const nonce = createNonce(32);
-    const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
+    const [state, hashedState] = createVerifierAndChallengePair(42);
+    const [nonce, hashedNonce] = createVerifierAndChallengePair(42);
+    const [codeVerifier, codeChallenge] = createVerifierAndChallengePair();
     setAuthStorage('state', state);
     setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
-    const params = createParamsFromConfig(this.authConfig, extraParams, state, nonce);
+    const params = createParamsFromConfig(this.authConfig, extraParams);
     Object.keys(params).forEach(key => {
       setAuthStorage(key, params[key]);
     });
+    params.state = hashedState;
+    params.nonce = hashedNonce;
     const authUrl = createAuthUrl(this.authConfig.authorizeEndpoint!, params, codeChallenge);
     redirectTo(authUrl);
   };
@@ -167,7 +170,8 @@ export class OIDCService {
 
   private getAuthResult = async (queryParams: URLSearchParams): Promise<AuthResult> => {
     const params = queryParams ?? getQueryParams();
-    this.checkState(params);
+    checkState(getAuthStorage().state, params.get('state')!);
+
     if (params.has('error')) throw new Error(params.get('error')!);
 
     try {
@@ -247,15 +251,6 @@ export class OIDCService {
     } catch (err) {
       throw err;
     }
-  };
-
-  private checkState = (params: URLSearchParams) => {
-    const state = params.get('state');
-    const authStorage = getAuthStorage();
-    if (authStorage.state && !state) throw new Error('Missing state parameter from redirect');
-    if (!authStorage.state && state) throw new Error('Missing state in storage but expected one');
-    if (authStorage.state && authStorage.state !== state) throw new Error('Invalid state');
-    if (authStorage.state && state) removeFromAuthStorage('state');
   };
 
   private ensureAllConfigIsLoaded = () => {

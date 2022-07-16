@@ -1,7 +1,7 @@
 import { KJUR } from 'jsrsasign';
 import { hexToBytes } from '@identity-auth/encoding';
 
-export const sha256 = (str: string) => {
+export const sha256 = (str: string, returnType: 'hex' | 'ascii' = 'hex') => {
   const hex = KJUR.crypto.Util.sha256(str);
   const asciiOutput = String.fromCharCode(...hexToBytes(hex));
   return asciiOutput;
