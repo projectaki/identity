@@ -45,8 +45,8 @@ export class AuthService {
     this.auth.setAuthStateChangeCb(this.authStateChangeCb);
   }
 
-  login = () => {
-    this.auth.login();
+  login = (params?: QueryParams) => {
+    this.auth.login(params);
   };
 
   logout = (queryParams?: QueryParams) => {

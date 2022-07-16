@@ -14,9 +14,6 @@ import { map } from 'rxjs';
     </ng-container>
     <ng-template #loggedOut>
       <button (click)="auth.login()">authorize</button>
-      <ng-container *ngIf="idTokenString$ | async as idtokenstring">
-        <button (click)="validate(idtokenstring)">validate</button>
-      </ng-container>
     </ng-template>
 
     <ng-container *ngIf="idToken$ | async as idtoken">
@@ -60,11 +57,11 @@ export class HomeComponent implements OnInit {
     })
   );
 
-  ngOnInit(): void {}
+  params = {
+    max_age: 5,
+  };
 
-  validate(token: string) {
-    this.auth.auth.validate(token);
-  }
+  ngOnInit(): void {}
 
   logout() {
     this.auth.localLogout();

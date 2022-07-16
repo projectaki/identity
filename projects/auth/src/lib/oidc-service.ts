@@ -27,14 +27,15 @@ export class OIDCService {
     this.authStateChangeCb = cb;
   }
 
-  login = async () => {
+  login = async (extraParams?: QueryParams) => {
+    removeFromAuthStorage('max_age'); //remove everything from storage
     const state = createNonce(32);
     const nonce = createNonce(32);
     const { codeVerifier, codeChallenge } = createCodeVerifierCodeChallengePair();
     setAuthStorage('state', state);
     setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
-    const params = createParamsFromConfig(this.authConfig, {}, state, nonce);
+    const params = createParamsFromConfig(this.authConfig, extraParams, state, nonce);
     Object.keys(params).forEach(key => {
       setAuthStorage(key, params[key]);
     });
@@ -80,7 +81,8 @@ export class OIDCService {
 
   hasValidIdToken = (inputToken?: string): boolean => {
     const token: string | undefined = inputToken ?? getAuthStorage().authResult?.id_token;
-    const isValid: boolean = !!token && validateIdToken(token, this.authConfig, getAuthStorage().nonce);
+    const isValid: boolean =
+      !!token && validateIdToken(token, this.authConfig, getAuthStorage().nonce, getAuthStorage().max_age);
 
     return isValid;
   };
@@ -94,14 +96,14 @@ export class OIDCService {
    */
   initAuth = async (authConfig: AuthConfig, authResultCb?: (x: AuthResult | void) => void): Promise<void> => {
     this.setAuthConfig(authConfig);
+    if (authConfig.discovery == null || authConfig.discovery) {
+      await this.loadDiscoveryDocument();
+    }
+    this.ensureAllConfigIsLoaded();
     try {
-      if (authConfig.discovery == null || authConfig.discovery) {
-        await this.loadDiscoveryDocument();
-      }
-      this.ensureAllConfigIsLoaded();
       await this.runAuthFlow(authResultCb);
     } catch (e) {
-      console.log(e);
+      this.login({ prompt: 'login' });
       throw e;
     }
   };
@@ -269,10 +271,5 @@ export class OIDCService {
 
     const issuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(discoveryDocument.issuer);
     if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
-  }
-
-  // Test method remove later
-  validate(idToken: string) {
-    validateIdToken(idToken, this.authConfig);
   }
 }

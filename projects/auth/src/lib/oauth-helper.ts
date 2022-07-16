@@ -309,7 +309,7 @@ export const createLogoutUrl = (endsessionEndpoint: string, queryParams?: QueryP
 
   const searchParams = new URLSearchParams();
   Object.keys(queryParams).forEach(key => {
-    searchParams.set(key, queryParams[key]);
+    searchParams.set(key, queryParams[key].toString());
   });
 
   return `${endsessionEndpoint}?${searchParams.toString()}`;
