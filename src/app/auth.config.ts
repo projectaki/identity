@@ -13,4 +13,5 @@ export const authConfig: AuthConfig = {
   queryParams: {
     audience: 'https://identity.com',
   },
+  clockSkewSeconds: 60,
 };

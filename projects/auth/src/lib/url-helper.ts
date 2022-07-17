@@ -9,3 +9,7 @@ export const getCurrentUrl = () => {
 export const getQueryParams = () => {
   return new URLSearchParams(location.search);
 };
+
+export const isHttps = (url: string) => {
+  return url.startsWith('https');
+};

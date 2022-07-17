@@ -13,6 +13,7 @@ export interface AuthConfig {
   validateDiscovery?: boolean;
   discovery?: boolean;
   clockSkewSeconds?: number;
+  useHttps?: boolean;
 }
 
 export interface AuthorizeUrlParams {
