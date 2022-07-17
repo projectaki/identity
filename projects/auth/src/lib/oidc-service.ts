@@ -12,7 +12,7 @@ import {
 } from '@identity-auth/core';
 import { AuthConfig, AuthResult, DiscoveryDocument, QueryParams } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
-import { getCurrentUrl, getQueryParams, redirectTo } from './url-helper';
+import { getCurrentUrl, getQueryParams, isHttps, redirectTo } from './url-helper';
 
 export class OIDCService {
   private authStateChangeCb: (authState: boolean) => void = () => false;
@@ -103,6 +103,7 @@ export class OIDCService {
       await this.loadDiscoveryDocument();
     }
     this.ensureAllConfigIsLoaded();
+    if (authConfig.useHttps !== false) this.tlsCheck();
     try {
       await this.runAuthFlow(authResultCb);
     } catch (e) {
@@ -267,4 +268,11 @@ export class OIDCService {
     const issuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(discoveryDocument.issuer);
     if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
   }
+
+  private tlsCheck = () => {
+    if (!isHttps(this.authConfig.issuer)) throw new Error('TLS check failed for issuer!');
+    if (!isHttps(this.authConfig.authorizeEndpoint!)) throw new Error('TLS check failed for authorize endpoint!');
+    if (!isHttps(this.authConfig.tokenEndpoint!)) throw new Error('TLS check failed for token endpoint!');
+    if (!isHttps(this.authConfig.endsessionEndpoint!)) throw new Error('TLS check failed for end session endpoint!');
+  };
 }
