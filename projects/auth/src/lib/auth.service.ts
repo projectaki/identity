@@ -1,20 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { AuthConfig, AuthResult, QueryParams } from '@identity-auth/models';
-import {
-  BehaviorSubject,
-  catchError,
-  filter,
-  from,
-  Observable,
-  of,
-  ReplaySubject,
-  Subject,
-  take,
-  tap,
-  throwError,
-} from 'rxjs';
+import { AuthResult, OIDCService, QueryParams } from '@zap.io/zap-oidc';
+import { BehaviorSubject, filter, take, ReplaySubject, of, catchError, throwError } from 'rxjs';
 import { AUTH_CONFIG } from './injection-tokens';
-import { OIDCService } from './oidc-service';
 
 @Injectable()
 export class AuthService {
