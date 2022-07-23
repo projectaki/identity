@@ -1,9 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit } from '@angular/core';
-import { base64Decode } from '@identity-auth/encoding';
-import { IdToken } from '@identity-auth/models';
-import { AUTH_CONFIG } from 'projects/auth/src/lib/injection-tokens';
-import { AuthService } from 'projects/auth/src/public-api';
+import { AuthService, AUTH_CONFIG } from '@identity-auth/core';
+import { base64Decode } from '@zap.io/zap-oidc';
 import { map } from 'rxjs';
 
 @Component({

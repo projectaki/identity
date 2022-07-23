@@ -7,7 +7,6 @@ import { AUTH_CONFIG } from './injection-tokens';
 export class AuthService {
   auth = new OIDCService();
   private authStateChangeCb: (authState: boolean) => void = x => {
-    console.log('authStateChangeCb', x);
     this.isAuthenticated.next(x);
   };
 

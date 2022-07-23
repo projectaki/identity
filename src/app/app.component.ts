@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
-import { AuthService } from 'projects/auth/src/public-api';
+import { AuthService } from '@identity-auth/core';
 
 @Component({
   selector: 'app-root',
@@ -14,11 +14,11 @@ export class AppComponent {
 
   ngOnInit(): void {
     this.auth.authResult$.subscribe(x => {
-      console.log('auth complete', x);
+      //console.log('auth complete', x);
     });
 
     this.auth.isAuthenticated$.subscribe(x => {
-      console.log('isAuthenticated', x);
+      //console.log('isAuthenticated', x);
     });
   }
 }

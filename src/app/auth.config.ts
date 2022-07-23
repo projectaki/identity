@@ -1,4 +1,4 @@
-import { AuthConfig } from '@identity-auth/models';
+import { AuthConfig } from '@zap.io/zap-oidc';
 
 export const authConfig: AuthConfig = {
   issuer: 'https://identity-auth.eu.auth0.com',

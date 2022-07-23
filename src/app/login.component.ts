@@ -8,6 +8,6 @@ import { Router } from '@angular/router';
 })
 export class LoginComponent {
   ngOnInit() {
-    console.log('LoginComponent.ngOnInit');
+    //console.log('LoginComponent.ngOnInit');
   }
 }

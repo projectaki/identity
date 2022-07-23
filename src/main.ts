@@ -4,10 +4,9 @@ import { AppComponent } from './app/app.component';
 import { HttpClientModule } from '@angular/common/http';
 
 import { environment } from './environments/environment';
-import { AuthService } from 'projects/auth/src/public-api';
 import { RouterModule } from '@angular/router';
 import { routes } from './app/routes';
-import { AUTH_CONFIG } from 'projects/auth/src/lib/injection-tokens';
+import { AuthService, AUTH_CONFIG } from '@identity-auth/core';
 import { authConfig } from './app/auth.config';
 
 if (environment.production) {
