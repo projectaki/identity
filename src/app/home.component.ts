@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit } from '@angular/core';
-import { AuthService, AUTH_CONFIG } from '@identity-auth/core';
 import { base64Decode } from '@zap.io/zap-oidc';
+import { AuthService, AUTH_CONFIG } from '@zap.io/zap-oidc-angular';
 import { map } from 'rxjs';
 
 @Component({

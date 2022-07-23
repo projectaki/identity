@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
-import { AuthService } from '@identity-auth/core';
+import { AuthService } from '@zap.io/zap-oidc-angular';
 
 @Component({
   selector: 'app-root',

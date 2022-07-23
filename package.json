@@ -19,6 +19,7 @@
     "@angular/platform-browser-dynamic": "^14.0.3",
     "@angular/router": "^14.0.3",
     "@zap.io/zap-oidc": "^0.0.2",
+    "@zap.io/zap-oidc-angular": "^0.0.1",
     "jsrsasign": "^10.5.25",
     "jsrsasign-util": "^1.0.5",
     "rxjs": "~7.5.0",
