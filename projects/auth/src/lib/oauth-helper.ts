@@ -312,14 +312,6 @@ export const createLogoutUrl = (endsessionEndpoint: string, queryParams?: QueryP
   return `${endsessionEndpoint}?${searchParams.toString()}`;
 };
 
-export const checkState = (localState?: string, returnedState?: string) => {
-  if (!localState && !returnedState) return;
-  if (localState && !returnedState) throw new Error('Missing state parameter from redirect');
-  if (!localState && returnedState) throw new Error('Missing state in storage but expected one');
-
-  if (!verifyChallenge(localState!, returnedState!)) throw new Error('Invalid state');
-};
-
 export const isAuthCallback = (authConfig: AuthConfig, useState?: boolean, responseType: 'code' = 'code') => {
   const params = getQueryParams();
   const currentUrl = getUrlWithoutParams();
