@@ -3,16 +3,16 @@ import {
   createAuthUrl,
   createDiscoveryUrl,
   createLogoutUrl,
-  createNonce,
   createParamsFromConfig,
   createTokenRequestBody,
   createVerifierAndChallengePair,
+  isAuthCallback,
   trimIssuerOfTrailingSlash,
   validateIdToken,
 } from '@identity-auth/core';
 import { AuthConfig, AuthResult, DiscoveryDocument, QueryParams } from '@identity-auth/models';
 import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
-import { getCurrentUrl, getQueryParams, isHttps, redirectTo } from './url-helper';
+import { getQueryParams, isHttps, redirectTo, replaceUrlState } from './url-helper';
 
 export class OIDCService {
   private authStateChangeCb: (authState: boolean) => void = () => false;
@@ -30,10 +30,14 @@ export class OIDCService {
 
   login = async (extraParams?: QueryParams) => {
     removeFromAuthStorage('max_age'); //remove everything from storage
+    removeFromAuthStorage('authResult');
+    removeFromAuthStorage('nonce');
+    removeFromAuthStorage('codeVerifier');
     const [state, hashedState] = createVerifierAndChallengePair(42);
     const [nonce, hashedNonce] = createVerifierAndChallengePair(42);
     const [codeVerifier, codeChallenge] = createVerifierAndChallengePair();
     setAuthStorage('state', state);
+    setAuthStorage('sendUserBackTo', window.location.href);
     setAuthStorage('nonce', nonce);
     setAuthStorage('codeVerifier', codeVerifier);
     const params = createParamsFromConfig(this.authConfig, extraParams);
@@ -113,32 +117,14 @@ export class OIDCService {
   };
 
   private runAuthFlow = async (authResultCb?: (x: AuthResult | void) => void) => {
-    const url = getCurrentUrl();
-    const queryParams = getQueryParams();
-
-    if (url.startsWith(this.authConfig.redirectUri) && queryParams.toString()) {
-      await handleRedirectRouteWithQueryParams.call(this);
-    } else if (url.startsWith(this.authConfig.redirectUri) && !queryParams.toString()) {
-      handleRedirectRouteWithoutQueryParams.call(this);
-    } else {
-      handleAllRoutesNotRedirectUri.call(this);
-    }
-
-    async function handleRedirectRouteWithQueryParams(this: OIDCService) {
-      const res = await this.getAuthResult(queryParams);
+    if (isAuthCallback(this.authConfig, true)) {
+      const res = await this.getAuthResult();
       this.evaluateAuthState(res.id_token);
       typeof authResultCb === 'function' && authResultCb(res);
-
       setAuthStorage('authResult', res);
-      redirectTo(this.authConfig.redirectUri);
-    }
-
-    function handleRedirectRouteWithoutQueryParams(this: OIDCService) {
-      typeof authResultCb === 'function' && authResultCb();
-      this.evaluateAuthState();
-    }
-
-    function handleAllRoutesNotRedirectUri(this: OIDCService) {
+      const sendUserBackTo = getAuthStorage().sendUserBackTo;
+      if (sendUserBackTo && this.authConfig.preserveRoute !== false) replaceUrlState(sendUserBackTo);
+    } else {
       this.evaluateAuthState();
     }
   };
@@ -169,8 +155,8 @@ export class OIDCService {
     }
   };
 
-  private getAuthResult = async (queryParams: URLSearchParams): Promise<AuthResult> => {
-    const params = queryParams ?? getQueryParams();
+  private getAuthResult = async (): Promise<AuthResult> => {
+    const params = getQueryParams();
     checkState(getAuthStorage().state, params.get('state')!);
 
     if (params.has('error')) throw new Error(params.get('error')!);
@@ -191,6 +177,7 @@ export class OIDCService {
     if (!params.has('code')) throw new Error('No code found in query params!');
 
     const code = params.get('code')!;
+    replaceUrlState(this.authConfig.redirectUri);
 
     try {
       const data = await this.fetchTokensWithCode(code);

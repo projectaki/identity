@@ -14,6 +14,7 @@ export interface AuthConfig {
   discovery?: boolean;
   clockSkewSeconds?: number;
   useHttps?: boolean;
+  preserveRoute?: boolean;
 }
 
 export interface AuthorizeUrlParams {

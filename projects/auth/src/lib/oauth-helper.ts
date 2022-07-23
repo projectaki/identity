@@ -4,6 +4,7 @@ import { sha256 } from '@identity-auth/hashing';
 import { KEYUTIL, KJUR } from 'jsrsasign';
 import { decodeJWt } from '@identity-auth/jwt';
 import { dateNowMsSinceEpoch } from './datetime-helper';
+import { getCurrentUrl, getQueryParams, getUrlWithoutParams } from './url-helper';
 
 const SKEW_DEFAULT = 0;
 
@@ -317,4 +318,18 @@ export const checkState = (localState?: string, returnedState?: string) => {
   if (!localState && returnedState) throw new Error('Missing state in storage but expected one');
 
   if (!verifyChallenge(localState!, returnedState!)) throw new Error('Invalid state');
+};
+
+export const isAuthCallback = (authConfig: AuthConfig, useState?: boolean, responseType: 'code' = 'code') => {
+  const params = getQueryParams();
+  const currentUrl = getUrlWithoutParams();
+  if (currentUrl !== authConfig.redirectUri) return false;
+  if (responseType === 'code') {
+    if (!params.has('code')) return false;
+  }
+  if (useState) {
+    if (!params.has('state')) return false;
+  }
+
+  return true;
 };
