@@ -1,8 +1,8 @@
 import {
-  checkState,
   createAuthUrl,
   createDiscoveryUrl,
   createLogoutUrl,
+  createNonce,
   createParamsFromConfig,
   createTokenRequestBody,
   createVerifierAndChallengePair,
@@ -11,14 +11,15 @@ import {
   validateIdToken,
 } from '@identity-auth/core';
 import { AuthConfig, AuthResult, DiscoveryDocument, QueryParams } from '@identity-auth/models';
-import { getAuthStorage, removeFromAuthStorage, setAuthStorage } from '@identity-auth/storage';
+import { StorageService } from './storage-service';
 import { getQueryParams, isHttps, redirectTo, replaceUrlState } from './url-helper';
 
 export class OIDCService {
-  private authStateChangeCb: (authState: boolean) => void = () => false;
   private isAuthenticated: boolean = false;
   private authConfig!: AuthConfig;
   private discoveryDocument!: DiscoveryDocument;
+  private storageService = new StorageService();
+  private authStateChangeCb: (authState: boolean) => void = () => false;
 
   /**
    *
@@ -28,25 +29,24 @@ export class OIDCService {
     this.authStateChangeCb = cb;
   }
 
+  setStorageStrategy(storage: Storage) {
+    this.storageService.setStorageStrategy(storage);
+  }
+
   login = async (extraParams?: QueryParams) => {
-    removeFromAuthStorage('max_age'); //remove everything from storage
-    removeFromAuthStorage('authResult');
-    removeFromAuthStorage('nonce');
-    removeFromAuthStorage('codeVerifier');
-    const [state, hashedState] = createVerifierAndChallengePair(42);
+    this.removeLocalSession();
+    const state = createNonce(42);
     const [nonce, hashedNonce] = createVerifierAndChallengePair(42);
     const [codeVerifier, codeChallenge] = createVerifierAndChallengePair();
-    setAuthStorage('state', state);
-    setAuthStorage('sendUserBackTo', window.location.href);
-    setAuthStorage('nonce', nonce);
-    setAuthStorage('codeVerifier', codeVerifier);
     const params = createParamsFromConfig(this.authConfig, extraParams);
-    Object.keys(params).forEach(key => {
-      setAuthStorage(key, params[key]);
-    });
-    params.state = hashedState;
-    params.nonce = hashedNonce;
-    const authUrl = createAuthUrl(this.authConfig.authorizeEndpoint!, params, codeChallenge);
+    const mergedParams = { nonce, codeVerifier, sendUserBackTo: window.location.href, ...params };
+    this.storageService.set('state', state);
+    this.storageService.set(state, mergedParams);
+    const authUrl = createAuthUrl(
+      this.authConfig.authorizeEndpoint!,
+      { ...params, state, nonce: hashedNonce },
+      codeChallenge
+    );
     redirectTo(authUrl);
   };
 
@@ -68,28 +68,31 @@ export class OIDCService {
   };
 
   getAccessToken = (): string | null => {
-    const token: string = getAuthStorage().authResult?.access_token;
-    if (token) {
-      return token;
-    }
+    const session = this.getLocalSession();
+    const token: string = session?.authResult.access_token;
 
-    return null;
+    return token ?? null;
   };
 
   getIdToken = (): string | null => {
-    const token: string = getAuthStorage().authResult?.id_token;
+    const session = this.getLocalSession();
+    const token: string = session?.authResult.id_token;
+
     if (!token) return null;
-
     const isValid = this.hasValidIdToken(token);
-    if (isValid) return token;
 
-    throw new Error('No valid id token found!');
+    if (!isValid) throw new Error('No valid id token found!');
+
+    return token;
   };
 
   hasValidIdToken = (inputToken?: string): boolean => {
-    const token: string | undefined = inputToken ?? getAuthStorage().authResult?.id_token;
-    const isValid: boolean =
-      !!token && validateIdToken(token, this.authConfig, getAuthStorage().nonce, getAuthStorage().max_age);
+    const session = this.getLocalSession();
+
+    if (!session) return false;
+    const { authResult, nonce, max_age } = session;
+    const token: string = inputToken ?? authResult.id_token;
+    const isValid: boolean = validateIdToken(token, this.authConfig, nonce, max_age);
 
     return isValid;
   };
@@ -101,7 +104,7 @@ export class OIDCService {
    * @param authResultCb Callback to be called when auth redirect has been processed and validated. Returns the auth result,
    * if the id token was valid, and returns void if the redirect uri route was loaded without query params.
    */
-  initAuth = async (authConfig: AuthConfig, authResultCb?: (x: AuthResult | void) => void): Promise<void> => {
+  initAuth = async (authConfig: AuthConfig, authResultCb?: (x: AuthResult) => void): Promise<void> => {
     this.setAuthConfig(authConfig);
     if (authConfig.discovery == null || authConfig.discovery) {
       await this.loadDiscoveryDocument();
@@ -116,13 +119,14 @@ export class OIDCService {
     }
   };
 
-  private runAuthFlow = async (authResultCb?: (x: AuthResult | void) => void) => {
+  private runAuthFlow = async (authResultCb?: (x: AuthResult) => void) => {
     if (isAuthCallback(this.authConfig, true)) {
       const res = await this.getAuthResult();
       this.evaluateAuthState(res.id_token);
       typeof authResultCb === 'function' && authResultCb(res);
-      setAuthStorage('authResult', res);
-      const sendUserBackTo = getAuthStorage().sendUserBackTo;
+      const session = this.getLocalSession();
+      this.storageService.set(this.storageService.get('state'), { ...session, authResult: res });
+      const { sendUserBackTo } = session;
       if (sendUserBackTo && this.authConfig.preserveRoute !== false) replaceUrlState(sendUserBackTo);
     } else {
       this.evaluateAuthState();
@@ -157,7 +161,7 @@ export class OIDCService {
 
   private getAuthResult = async (): Promise<AuthResult> => {
     const params = getQueryParams();
-    checkState(getAuthStorage().state, params.get('state')!);
+    this.checkState(params);
 
     if (params.has('error')) throw new Error(params.get('error')!);
 
@@ -171,6 +175,13 @@ export class OIDCService {
       console.error(e);
       throw e;
     }
+  };
+
+  private checkState = (params: URLSearchParams) => {
+    const returnedState = params.get('state');
+    if (!returnedState) throw new Error('State expected from query params!');
+    const storedState = this.storageService.get('state');
+    if (storedState !== returnedState) throw new Error('Invalid state!');
   };
 
   private handleCodeFlowRedirect = async (params: URLSearchParams): Promise<AuthResult> => {
@@ -204,10 +215,17 @@ export class OIDCService {
     return isAuthed;
   };
 
+  private getLocalSession = () => {
+    const state = this.storageService.get('state');
+    if (!state) return null;
+
+    return this.storageService.get(state);
+  };
+
   private removeLocalSession = () => {
-    removeFromAuthStorage('authResult');
-    removeFromAuthStorage('nonce');
-    removeFromAuthStorage('codeVerifier');
+    const state = this.storageService.get('state');
+    this.storageService.remove('state');
+    this.storageService.remove(state);
     this.setAuthState(false);
   };
 
@@ -224,7 +242,7 @@ export class OIDCService {
   };
 
   private fetchTokensWithCode = async (code: string): Promise<AuthResult> => {
-    const { codeVerifier } = getAuthStorage();
+    const { codeVerifier } = this.getLocalSession();
     const body = createTokenRequestBody(this.authConfig, code, codeVerifier);
     try {
       const response = await fetch(this.authConfig.tokenEndpoint!, {

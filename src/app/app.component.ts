@@ -17,11 +17,6 @@ export class AppComponent {
       console.log('auth complete', x);
     });
 
-    this.auth.redirectPageProcessedAndLoaded$.subscribe(x => {
-      console.log('auth flow complete', x);
-      this.router.navigate(['/']);
-    });
-
     this.auth.isAuthenticated$.subscribe(x => {
       console.log('isAuthenticated', x);
     });

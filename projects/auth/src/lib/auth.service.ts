@@ -33,12 +33,6 @@ export class AuthService {
   private isAuthenticated = new ReplaySubject<boolean>(1);
   public isAuthenticated$ = this.isAuthenticated.asObservable();
 
-  private redirectPageProcessedAndLoaded = new BehaviorSubject<boolean>(false);
-  public redirectPageProcessedAndLoaded$ = this.redirectPageProcessedAndLoaded.asObservable().pipe(
-    filter(x => x),
-    take(1)
-  );
-
   private config = inject(AUTH_CONFIG);
 
   constructor() {
@@ -61,8 +55,6 @@ export class AuthService {
     const cb_2 = (x: AuthResult | void) => {
       if (x) {
         this.authResult.next(x);
-      } else {
-        this.redirectPageProcessedAndLoaded.next(true);
       }
 
       return x;
@@ -83,5 +75,9 @@ export class AuthService {
         return throwError(() => 'No id token found');
       })
     );
+  };
+
+  setStorageStrategy = (strategy: Storage) => {
+    this.auth.setStorageStrategy(strategy);
   };
 }
