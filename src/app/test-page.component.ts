@@ -1,20 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
+import { AuthService } from '@identity-auth/core';
 
 @Component({
   selector: 'app-test-page',
-  template: `
-    <p>
-      test-page works!
-    </p>
-  `,
-  styles: [
-  ]
+  template: ` <button (click)="auth.login()">login</button>`,
+  styles: [],
 })
 export class TestPageComponent implements OnInit {
+  protected auth = inject(AuthService);
 
-  constructor() { }
+  constructor() {}
 
-  ngOnInit(): void {
-  }
-
+  ngOnInit(): void {}
 }

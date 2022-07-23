@@ -14,4 +14,5 @@ export const authConfig: AuthConfig = {
     audience: 'https://identity.com',
   },
   clockSkewSeconds: 60,
+  preserveRoute: true,
 };
