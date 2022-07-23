@@ -1,5 +1,5 @@
 import { query } from '@angular/animations';
-import { createAuthUrl } from './oauth-helper';
+import { createAuthUrl } from './oidc-helper';
 
 describe('oauth-helper', () => {
   describe('createAuthUrl', () => {

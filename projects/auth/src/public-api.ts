@@ -1,2 +1,2 @@
 export * from './lib/auth.service';
-export * from './lib/oauth-helper';
+export * from './lib/oidc-helper';

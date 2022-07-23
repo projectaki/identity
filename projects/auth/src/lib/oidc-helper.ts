@@ -71,7 +71,6 @@ export const getGrantType = (authConfig: AuthConfig) => {
 export const createVerifierAndChallengePair = (length?: number) => {
   const verifier = createNonce(length ?? 32);
   const challenge = base64UrlEncode(sha256(verifier, 'ascii'));
-  console.log('challenge', challenge, 'verifier', verifier);
   return [verifier, challenge];
 };
 
@@ -99,13 +98,13 @@ export const createNonce = (length: number) => {
 
 export const createDiscoveryUrl = (issuer: string) => {
   const route = '/.well-known/openid-configuration';
-  const issuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(issuer);
+  const issuerWithoutTrailingSlash = trimTrailingSlash(issuer);
 
   return `${issuerWithoutTrailingSlash}${route}`;
 };
 
-export const trimIssuerOfTrailingSlash = (issuer: string) => {
-  return issuer.endsWith('/') ? issuer.slice(0, -1) : issuer;
+export const trimTrailingSlash = (value: string) => {
+  return value.endsWith('/') ? value.slice(0, -1) : value;
 };
 
 export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?: string, max_age?: number): boolean => {
@@ -135,11 +134,12 @@ export const validateIdToken = (idToken: string, authConfig: AuthConfig, nonce?:
 
   /*
   2. The Issuer Identifier for the OpenID Provider (which is typically obtained during Discovery)
-   `**MUST**` exactly match the value of the `iss` (issuer) Claim.
+   `**MUST**` exactly match the value of the `iss` (issuer) Claim. (It is trimmed for trailing slash, as this may be the case
+    for some IDPs.)
    */
   function validateIssuer() {
-    const registeredIssuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(authConfig.issuer);
-    const tokenIssuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(payload.iss);
+    const registeredIssuerWithoutTrailingSlash = trimTrailingSlash(authConfig.issuer);
+    const tokenIssuerWithoutTrailingSlash = trimTrailingSlash(payload.iss);
 
     if (registeredIssuerWithoutTrailingSlash !== tokenIssuerWithoutTrailingSlash) {
       throw new Error(`Invalid issuer, expected ${authConfig.issuer} but got ${payload.iss}`);
@@ -191,8 +191,8 @@ or if it contains additional audiences not trusted by the Client.
         throw new Error('Invalid signature');
       }
     } else {
-      const jwk = authConfig.jwks.keys[0];
-      if (jwk.alg !== alg) throw new Error('There was no kid, and could not find jwk with matching alg');
+      const jwk = authConfig.jwks.keys.find((jwk: any) => jwk.alg === alg);
+      if (!jwk) throw new Error('There was no kid, and could not find jwk with matching alg');
       const pubKey = KEYUTIL.getKey(jwk) as jsrsasign.RSAKey;
 
       const isValid = KJUR.jws.JWS.verify(idToken, pubKey, [alg]);
@@ -283,7 +283,6 @@ or if it contains additional audiences not trusted by the Client.
   }
 
   /*
-  THIS FUNCTIONALITY IS NOT SUPPORTED
   13. If the `auth_time` Claim was requested, either through a specific request for this Claim
   or by using the `max_age` parameter, the Client `**SHOULD**` check the `auth_time` Claim value
   and request re-authentication if it determines too much time has elapsed since the last End-User authentication.
@@ -312,7 +311,7 @@ export const createLogoutUrl = (endsessionEndpoint: string, queryParams?: QueryP
   return `${endsessionEndpoint}?${searchParams.toString()}`;
 };
 
-export const isAuthCallback = (authConfig: AuthConfig, useState?: boolean, responseType: 'code' = 'code') => {
+export const isAuthCallback = (authConfig: AuthConfig, useState: boolean = true, responseType: 'code' = 'code') => {
   const params = getQueryParams();
   const currentUrl = getUrlWithoutParams();
   if (currentUrl !== authConfig.redirectUri) return false;

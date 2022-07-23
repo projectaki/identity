@@ -27,5 +27,5 @@ export const getQueryParams = () => {
 };
 
 export const isHttps = (url: string) => {
-  return url.startsWith('https');
+  return url.startsWith('https://');
 };

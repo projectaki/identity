@@ -7,7 +7,7 @@ import {
   createTokenRequestBody,
   createVerifierAndChallengePair,
   isAuthCallback,
-  trimIssuerOfTrailingSlash,
+  trimTrailingSlash,
   validateIdToken,
 } from '@identity-auth/core';
 import { AuthConfig, AuthResult, DiscoveryDocument, QueryParams } from '@identity-auth/models';
@@ -69,9 +69,8 @@ export class OIDCService {
 
   getAccessToken = (): string | null => {
     const session = this.getLocalSession();
-    const token: string = session?.authResult.access_token;
 
-    return token ?? null;
+    return session?.authResult.access_token;
   };
 
   getIdToken = (): string | null => {
@@ -81,20 +80,7 @@ export class OIDCService {
     if (!token) return null;
     const isValid = this.hasValidIdToken(token);
 
-    if (!isValid) throw new Error('No valid id token found!');
-
-    return token;
-  };
-
-  hasValidIdToken = (inputToken?: string): boolean => {
-    const session = this.getLocalSession();
-
-    if (!session) return false;
-    const { authResult, nonce, max_age } = session;
-    const token: string = inputToken ?? authResult.id_token;
-    const isValid: boolean = validateIdToken(token, this.authConfig, nonce, max_age);
-
-    return isValid;
+    return isValid ? token : null;
   };
 
   /**
@@ -114,13 +100,24 @@ export class OIDCService {
     try {
       await this.runAuthFlow(authResultCb);
     } catch (e) {
-      this.login({ prompt: 'login' });
+      console.error(e);
       throw e;
     }
   };
 
+  private hasValidIdToken = (inputToken?: string): boolean => {
+    const session = this.getLocalSession();
+
+    if (!session) return false;
+    const { authResult, nonce, max_age } = session;
+    const token: string = inputToken ?? authResult.id_token;
+    const isValid: boolean = validateIdToken(token, this.authConfig, nonce, max_age);
+
+    return isValid;
+  };
+
   private runAuthFlow = async (authResultCb?: (x: AuthResult) => void) => {
-    if (isAuthCallback(this.authConfig, true)) {
+    if (isAuthCallback(this.authConfig)) {
       const res = await this.getAuthResult();
       this.evaluateAuthState(res.id_token);
       typeof authResultCb === 'function' && authResultCb(res);
@@ -270,7 +267,7 @@ export class OIDCService {
   private validateDiscoveryDocument(discoveryDocument: DiscoveryDocument) {
     if (!discoveryDocument) throw new Error('Discovery document is required!');
 
-    const issuerWithoutTrailingSlash = trimIssuerOfTrailingSlash(discoveryDocument.issuer);
+    const issuerWithoutTrailingSlash = trimTrailingSlash(discoveryDocument.issuer);
     if (issuerWithoutTrailingSlash !== this.authConfig.issuer) throw new Error('Invalid issuer in discovery document');
   }
 
